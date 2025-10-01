@@ -1,0 +1,4 @@
+{"sentence": "This an example sentence.", "union": ["Type 1"], "dissent": ["Type 2","Type 4"]}
+{"sentence": "This another example sentence!", "union": ["Type 1","Type 2"], "dissent": []}
+{"sentence": "One more example sentence?", "union": [], "dissent": ["Type 1", "Type 3"]}
+

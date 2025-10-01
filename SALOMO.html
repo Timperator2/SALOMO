@@ -1,0 +1,1372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>JSONL Dissent Resolver + Search/Filter</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg:#0f172a; --panel:#111827; --muted:#94a3b8; --text:#e5e7eb; --border:#1f2937;
+      --accent:#06b6d4; --danger:#ef4444; --ok:#22c55e;
+      /* legacy group colors (fallbacks if a taxonomy doesn't provide colors) */
+      --g-framing:#eab308; --g-preferring:#3b82f6; --g-asserting:#6b7280; --g-dividing:#ec4899;
+      --g-personalizing:#f97316; --g-confirming:#8b5cf6; --g-deflecting:#14b8a6; --g-misreasoning:#06b6d4;
+    }
+    body { margin:0; font-family: system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial,"Noto Sans";
+           background:var(--bg); color:var(--text);}
+    header { padding:16px 24px; border-bottom:1px solid var(--border); display:flex; gap:16px; align-items:center; flex-wrap:wrap;}
+    header h1 { font-size:18px; margin:0; font-weight:600;}
+
+    /* Three-column resizable grid */
+    main#mainGrid {
+      display:grid;
+      grid-template-columns: var(--left-col, 360px) var(--resizer-w, 6px) minmax(520px, 1fr) var(--resizer-w, 6px) var(--right-col, 420px);
+      min-height: calc(100vh - 58px);
+    }
+    .resizer {
+      background: var(--border);
+      cursor: col-resize;
+      position: relative;
+      user-select: none;
+    }
+    .resizer:hover, .resizer.active { background:#334155; }
+    .resizer::after {
+      content:'';
+      position:absolute; left:50%; top:50%;
+      transform: translate(-50%,-50%);
+      width:2px; height:24px; background:#475569; border-radius:2px;
+    }
+
+    /* Sidebars */
+    aside { padding:16px; background:var(--panel); }
+    aside.leftbar { border-right:1px solid var(--border); }
+    aside.rightbar { border-left:1px solid var(--border); }
+    section { padding:20px; }
+
+    .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .stack { display:flex; flex-direction:column; gap:8px; }
+    .stack-lg { display:flex; flex-direction:column; gap:12px; }
+    .muted { color: var(--muted); font-size: 12px; }
+    input[type="file"], input[type="text"], input[type="number"], select {
+      background:#0b1220; color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px 10px; width:100%;
+    }
+    input[type="text"]::placeholder { color:#64748b; }
+    button {
+      background:#111827; color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px 10px; cursor:pointer;
+    }
+    button.primary { background: linear-gradient(180deg, #0891b2, #0369a1); border-color:#075985; }
+    button.ok { background: linear-gradient(180deg, #16a34a, #15803d); border-color:#166534;}
+    button.warn { background: linear-gradient(180deg, #dc2626, #b91c1c); border-color:#7f1d1d;}
+    button:disabled { opacity:0.5; cursor:not-allowed; }
+    .panel { background:#0b1220; border:1px solid var(--border); border-radius:12px; padding:12px; }
+    .sentence { font-size: 18px; line-height:1.5; padding:16px; background:#0b1220; border:1px solid var(--border); border-radius:12px; }
+    .chips { display:flex; gap:8px; flex-wrap:wrap; }
+    .chip { background:#0b1220; border:1px solid var(--border); padding:4px 8px; border-radius:999px; font-size:12px; color:#cbd5e1; position:relative; }
+    .chip.added { box-shadow: inset 0 0 0 1px #065f46; }
+    .chip.removed { box-shadow: inset 0 0 0 1px #7f1d1d; }
+    .chip .x { margin-left:6px; color:#94a3b8; cursor:pointer; }
+    .chip .x:hover { color:#e5e7eb; }
+    .decision { display:flex; align-items:center; justify-content:space-between; gap:12px; border-bottom:1px dashed var(--border); padding:8px 0;}
+    .decision:last-child { border-bottom:none; }
+    .decision-label { font-weight:600; }
+    .seg { display:flex; border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+    .seg button { border:none; padding:6px 10px; background:transparent; }
+    .seg button.active.keep { background:#064e3b; color:#bbf7d0; }
+    .seg button.active.drop { background:#7f1d1d; color:#fecaca; }
+    .progress { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .bar { height:8px; background:#0b1220; border:1px solid var(--border); border-radius:999px; overflow:hidden; }
+    .bar > div { height:100%; background:linear-gradient(90deg, #16a34a, #06b6d4); width:0%; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .small { font-size: 12px; }
+    .footer { display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; align-items:center; }
+
+    /* Status badge */
+    .badge { font-size:12px; padding:2px 8px; border-radius:999px; border:1px solid var(--border); }
+    .badge.ok { background:#064e3b; color:#bbf7d0; border-color:#065f46; }
+    .badge.warn { background:#7f1d1d; color:#fecaca; border-color:#7f1d1d; }
+
+    /* Tooltip */
+    .tip { position:relative; }
+    .tip[data-tip]:hover::after {
+      content: attr(data-tip);
+      position:absolute; left:0; bottom:calc(100% + 10px);
+      background:#0b1320; color:#e5e7eb;
+      border:1px solid var(--border); border-left:4px solid var(--tipcolor, #06b6d4);
+      border-radius:8px; padding:8px 10px; white-space:pre-wrap;
+      max-width:min(520px, 80vw); width:max-content; z-index:9999;
+      box-shadow:0 10px 30px rgba(0,0,0,.4); pointer-events:none;
+    }
+    .tip[data-tip]:hover::before {
+      content:""; position:absolute; left:12px; bottom:calc(100% + 4px);
+      border:6px solid transparent; border-top-color:#0b1320; z-index:9999; pointer-events:none;
+    }
+
+    /* Modal */
+    .modal { position:fixed; inset:0; background: rgba(0,0,0,.5); display:none; align-items:center; justify-content:center; z-index:50; }
+    .modal.open { display:flex; }
+    .modal .content { background:#0b1220; border:1px solid var(--border); border-radius:12px; padding:16px; width:720px; max-width:92vw; }
+    .modal .header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+    .modal .footer { display:flex; justify-content:flex-end; gap:8px; margin-top:12px; }
+
+    /* Search results */
+    .results { max-height:260px; overflow:auto; border:1px solid var(--border); border-radius:8px; background:#0b1220; padding:6px; }
+    .result { padding:6px; border-bottom:1px dashed var(--border); cursor:pointer; }
+    .result:last-child { border-bottom:none; }
+    .result:hover { background:#111827; }
+    .result .meta { font-size:11px; color:var(--muted); }
+    .result .snippet { font-size:12px; }
+    mark { background:#fde68a; color:#111827; border-radius:3px; padding:0 2px; }
+
+    /* Type reference (right column) */
+    .type-ref-header { font-weight:600; }
+    .type-ref-tip { color:var(--muted); font-size:12px; }
+    .type-ref-list { flex:1; overflow:auto; display:flex; flex-direction:column; gap:10px; }
+    .group { border:1px solid var(--border); border-radius:12px; overflow:hidden; background:#0b1220; }
+    .group-hdr {
+      display:flex; justify-content:space-between; align-items:center;
+      padding:10px 12px; cursor:pointer; background:#0e1628; font-weight:700; user-select:none;
+    }
+    .group-hdr .meta { font-weight:500; color:var(--muted); font-size:12px; }
+    .group-items { padding:8px 0; }
+    .group.collapsed .group-items { display:none; }
+    .group.collapsed .arrow { transform: rotate(-90deg); }
+    .arrow { transition: transform .15s; margin-right:6px; }
+    .ref-type { padding:10px 12px; border-top:1px dashed var(--border); }
+    .ref-type:first-child { border-top:none; }
+    .ref-name { font-weight:700; }
+    .ref-def { margin-top:6px; font-size:13px; color:#dbe3ef; }
+    .ref-ex { margin-top:6px; font-size:12px; color:#9aa8c0; font-style:italic; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>JSONL Dissent Resolver</h1>
+  <div class="muted">Load your taxonomy file (JSON), then load a dataset. Keep/remove dissent labels into union, edit union, search, filter, delete, and export.</div>
+</header>
+
+<main id="mainGrid">
+  <!-- Left: Controls -->
+  <aside class="stack leftbar">
+
+    <!-- New: Load Taxonomy -->
+    <div class="stack panel">
+      <div style="font-weight:600;">Load Taxonomy (JSON)</div>
+      <label class="small muted">Choose file</label>
+      <input type="file" id="taxFileInput" accept=".json,.txt,.jsonc" />
+      <div class="muted small">Or fetch from URL</div>
+      <div class="row">
+        <input id="taxUrlInput" type="text" placeholder="https://example.com/taxonomy.json" />
+        <button id="taxUrlBtn">Fetch</button>
+      </div>
+      <div id="taxInfo" class="muted small"></div>
+    </div>
+
+    <div class="stack panel">
+      <label class="small muted">Load JSONL (UTF‑8)</label>
+      <input type="file" id="fileInput" accept=".jsonl,.txt,.json" />
+      <div class="small muted">Lines must be JSON objects with: sentence, union (array), dissent (array)</div>
+    </div>
+
+    <div class="stack panel">
+      <label class="small muted">Annotator Name (optional)</label>
+      <input id="annotatorName" type="text" placeholder="e.g., alice" />
+    </div>
+
+    <div id="datasetInfo" class="stack panel" style="display:none;">
+      <div class="progress">
+        <div>
+          <div id="idxLabel">Item 0/0</div>
+          <div id="resolvedLabel" class="muted small">Resolved 0 of 0</div>
+          <div id="filterInfo" class="muted small" style="margin-top:4px;"></div>
+        </div>
+      </div>
+      <div class="bar"><div id="barFill"></div></div>
+      <div class="row" style="margin-top:8px;">
+        <button id="prevBtn">Prev</button>
+        <button id="nextBtn">Next</button>
+        <button id="nextUnresolvedBtn">Next unresolved</button>
+      </div>
+      <div class="row">
+        <input id="jumpInput" type="number" min="1" value="1" style="width:90px;" />
+        <button id="jumpBtn">Go</button>
+      </div>
+      <div class="stack" style="margin-top:6px;">
+        <label class="small muted">Output filename (.jsonl)</label>
+        <input id="outputFilename" type="text" placeholder="resolved.jsonl" />
+      </div>
+      <div class="row">
+        <button id="downloadBtn" class="primary">Download results (.jsonl, UTF‑8)</button>
+      </div>
+    </div>
+
+    <div class="stack panel">
+      <div style="font-weight:600;">Search & Filter</div>
+
+      <div class="stack">
+        <label class="small muted">Keyword in sentence</label>
+        <div class="row">
+          <input id="searchInput" type="text" placeholder="keyword…" />
+          <button id="searchBtn">Search</button>
+          <button id="clearSearchBtn">Clear</button>
+        </div>
+        <div id="searchResults" class="results" style="display:none;"></div>
+      </div>
+
+      <div class="stack" style="margin-top:8px;">
+        <label class="small muted">Filter by union type</label>
+        <div class="row">
+          <select id="unionTypeSelect" title="Show only items whose union contains this type"></select>
+          <button id="applyFilterBtn">Apply</button>
+          <button id="clearFilterBtn">Clear</button>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Resizer between left and center -->
+  <div id="resizerL" class="resizer" role="separator" aria-orientation="vertical" aria-label="Resize left panel"></div>
+
+  <!-- Center: Work area -->
+  <section class="stack-lg">
+    <div id="workArea" style="display:none;">
+      <div class="panel stack">
+        <div class="row" style="justify-content:space-between; align-items:center;">
+          <div class="muted small">Sentence</div>
+          <div id="statusField" class="small"></div>
+        </div>
+        <div id="sentence" class="sentence"></div>
+      </div>
+
+      <div class="grid">
+        <div class="panel stack">
+          <div class="muted small">Union (original)</div>
+          <div id="unionOriginal" class="chips"></div>
+        </div>
+        <div class="panel stack">
+          <div class="row" style="justify-content:space-between; align-items:center;">
+            <div class="muted small">Union (after your decisions)</div>
+            <button id="editUnionBtn">Modify union</button>
+          </div>
+          <div id="unionPreview" class="chips"></div>
+        </div>
+      </div>
+
+      <div class="panel stack">
+        <div class="row" style="justify-content:space-between;">
+          <div>
+            <div class="muted small">Dissent labels: choose Keep in union or Remove</div>
+          </div>
+          <div class="row">
+            <button id="keepAllBtn" class="ok">Keep ALL</button>
+            <button id="removeAllBtn" class="warn">Remove ALL</button>
+          </div>
+        </div>
+        <div id="dissentArea" class="stack"></div>
+      </div>
+
+      <div class="footer">
+        <button id="deleteItemBtn" class="warn" title="Remove this sentence from the dataset">Remove sentence from dataset</button>
+        <button id="clearItemBtn">Clear decisions (this item)</button>
+        <div style="flex:1"></div>
+        <button id="saveBtn" class="primary">Save</button>
+        <button id="saveNextBtn" class="primary">Save & Next</button>
+      </div>
+    </div>
+
+    <div id="placeholder" class="panel muted">
+      Load a taxonomy in the left panel, then load a JSONL file to begin.
+    </div>
+  </section>
+
+  <!-- Resizer between center and right -->
+  <div id="resizerR" class="resizer" role="separator" aria-orientation="vertical" aria-label="Resize right panel"></div>
+
+  <!-- Right: Type Reference -->
+  <aside id="typesAside" class="stack rightbar">
+    <div class="stack">
+      <div class="type-ref-header">Type Reference</div>
+      <div id="typeRefMeta" class="type-ref-tip">No taxonomy loaded.</div>
+    </div>
+    <div id="typeRefList" class="type-ref-list"></div>
+  </aside>
+</main>
+
+<!-- Union Editor Modal -->
+<div id="unionModal" class="modal" aria-hidden="true">
+  <div class="content">
+    <div class="header">
+      <div>
+        <div style="font-weight:700;">Modify union</div>
+        <div class="muted small">Add or remove types directly. Chips are colored by group. Hover for definitions.</div>
+      </div>
+      <button id="closeUnionModal">✕</button>
+    </div>
+
+    <div class="stack">
+      <div class="muted small">Current union</div>
+      <div id="editUnionChips" class="chips"></div>
+    </div>
+
+    <div class="panel stack" style="margin-top:12px;">
+      <div class="muted small">Add a type</div>
+      <div class="row" style="gap:8px;">
+        <input id="addTypeInput" type="text" placeholder="Start typing to search (e.g., Word Choice Bias)" list="typeList" />
+        <datalist id="typeList"></datalist>
+        <button id="addTypeBtn" class="ok">Add</button>
+      </div>
+      <div class="muted small">Tip: You can also press Enter to add the highlighted suggestion.</div>
+    </div>
+
+    <div class="footer">
+      <button id="resetUnionBtn">Reset to original union</button>
+      <div style="flex:1"></div>
+      <button id="applyUnionBtn" class="primary">Apply</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ===== Helpers =====
+  const $ = sel => document.querySelector(sel);
+  function getCssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+  function dedupePreserveOrder(arr) { const seen=new Set(), out=[]; for (const x of arr) if (!seen.has(x)) { seen.add(x); out.push(x); } return out; }
+  function escapeRegExp(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+  function formatDate(iso) { if (!iso) return ''; try { return new Date(iso).toLocaleString(); } catch { return iso; } }
+
+  // Deterministic fallback color from string
+  function stringToColor(str) {
+    let h = 0; for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
+    const hue = h % 360;
+    const sat = 70;  // %
+    const lit = 60;  // %
+    return `hsl(${hue}deg ${sat}% ${lit}%)`;
+  }
+
+  // ===== Taxonomy state (loaded from external file or URL) =====
+  let TAXONOMY = {
+    meta: { name:'', version:'', description:'' },
+    groups: {},          // groupName -> { color, description?, ... }
+    groupOrder: [],      // optional order from file; fallback alphabetical
+    types: {},           // typeName -> { group, def, ex, color?, aliases?[] }
+    aliases: {}          // lower(alias) -> canonicalTypeName
+  };
+
+  function normalizeTaxonomy(raw) {
+    const out = {
+      meta: {
+        name: (raw.name || raw.title || '').trim(),
+        version: (raw.version || '').toString(),
+        description: (raw.description || raw.desc || '').toString()
+      },
+      groups: {},
+      groupOrder: [],
+      types: {},
+      aliases: {}
+    };
+
+    // Read groups
+    if (Array.isArray(raw.groups)) {
+      for (const g of raw.groups) {
+        const name = (g.name || g.label || g.id || '').toString().trim();
+        if (!name) continue;
+        out.groups[name] = {
+          color: g.color || g.colour || null,
+          description: g.description || g.desc || ''
+        };
+        out.groupOrder.push(name);
+      }
+    } else if (raw.groups && typeof raw.groups === 'object') {
+      for (const name of Object.keys(raw.groups)) {
+        const g = raw.groups[name] || {};
+        out.groups[name] = {
+          color: g.color || g.colour || null,
+          description: g.description || g.desc || ''
+        };
+      }
+      out.groupOrder = Object.keys(out.groups);
+    }
+
+    // Types can be array or object, or raw itself can be a types mapping
+    let typesInput = null;
+    if (Array.isArray(raw.types)) typesInput = raw.types;
+    else if (raw.types && typeof raw.types === 'object') typesInput = Object.entries(raw.types).map(([k, v]) => ({ name:k, ...v }));
+    else {
+      // Heuristic: treat raw as types mapping if it looks like it (no groups, many keys with objects containing group/def)
+      const maybeTypes = Object.entries(raw).filter(([k,v]) => typeof v === 'object' && v && ('group' in v || 'definition' in v || 'def' in v));
+      if (maybeTypes.length >= 3) typesInput = maybeTypes.map(([k,v]) => ({ name:k, ...v }));
+    }
+
+    if (Array.isArray(typesInput)) {
+      for (const t of typesInput) {
+        const name = (t.name || t.id || '').toString().trim();
+        if (!name) continue;
+        const group = (t.group || t.groupId || 'Other').toString().trim() || 'Other';
+        const def = (t.def || t.definition || t.description || '').toString();
+        const ex = (t.ex || t.example || t.sample || '').toString();
+        const color = t.color || null;
+        const aliases = Array.isArray(t.aliases || t.synonyms) ? (t.aliases || t.synonyms) : (t.alias ? [t.alias] : []);
+        out.types[name] = { group, def, ex, color, aliases: aliases.map(a => a.toString()) };
+
+        // build alias map
+        for (const a of out.types[name].aliases) {
+          const key = a.toLowerCase();
+          if (!out.aliases[key]) out.aliases[key] = name;
+        }
+
+        // ensure group exists
+        if (!out.groups[group]) {
+          out.groups[group] = { color: null, description: '' };
+          out.groupOrder.push(group);
+        }
+      }
+    }
+
+    // Fill missing group colors with fallback
+    for (const g of Object.keys(out.groups)) {
+      if (!out.groups[g].color) out.groups[g].color = stringToColor(g);
+    }
+
+    // If no meta.name, create a friendly one
+    if (!out.meta.name) out.meta.name = 'Custom Taxonomy';
+
+    // Deduplicate order
+    out.groupOrder = dedupePreserveOrder(out.groupOrder);
+
+    return out;
+  }
+
+  function setTaxonomy(raw) {
+    try {
+      TAXONOMY = normalizeTaxonomy(raw);
+      try { localStorage.setItem('taxonomy_raw', JSON.stringify(raw)); } catch {}
+    } catch(e) {
+      alert('Failed to parse taxonomy file.');
+      console.error(e);
+      return;
+    }
+    renderTypeReference();
+    rebuildTypeDatalist();
+    updateTypeSelectOptions();
+    renderTaxInfo();
+    // Repaint current item (colors/defs may improve now)
+    if (data.length) renderItem();
+  }
+
+  function renderTaxInfo() {
+    const gCount = Object.keys(TAXONOMY.groups).length;
+    const tCount = Object.keys(TAXONOMY.types).length;
+    $('#taxInfo').textContent = `Loaded: ${TAXONOMY.meta.name || 'Custom Taxonomy'} — ${tCount} types in ${gCount} groups` + (TAXONOMY.meta.version ? ` (v${TAXONOMY.meta.version})` : '');
+    const tip = TAXONOMY.meta.description ? ` — ${TAXONOMY.meta.description}` : '';
+    $('#typeRefMeta').textContent = `${TAXONOMY.meta.name || 'Custom Taxonomy'}${TAXONOMY.meta.version ? ' • v'+TAXONOMY.meta.version : ''}${tip}`;
+  }
+
+  function getTypeNames() { return Object.keys(TAXONOMY.types).sort((a,b)=>a.localeCompare(b)); }
+
+  function lookupCanonicalType(name) {
+    if (!name) return null;
+    if (TAXONOMY.types[name]) return name;
+    const ali = TAXONOMY.aliases[name.toLowerCase()];
+    if (ali && TAXONOMY.types[ali]) return ali;
+    // Case-insensitive match by name
+    const lower = name.toLowerCase();
+    const exact = getTypeNames().find(x => x.toLowerCase() === lower);
+    if (exact) return exact;
+    return null;
+  }
+
+  function getTypeInfo(name) {
+    const canonical = lookupCanonicalType(name);
+    const rec = canonical ? TAXONOMY.types[canonical] : null;
+    if (!rec) {
+      return { group:'', color: '#cbd5e1', def:'', ex:'' };
+    }
+    const groupColor = TAXONOMY.groups[rec.group]?.color || stringToColor(rec.group);
+    const color = rec.color || groupColor;
+    return { group: rec.group, color, def: rec.def || '', ex: rec.ex || '' };
+  }
+
+  function tooltipText(name) {
+    const info = getTypeInfo(name);
+    if (!info.group && !info.def) return name;
+    const lines = [`${name} — ${info.group}`];
+    if (info.def) lines.push('', info.def);
+    if (info.ex) lines.push('', `Example: ${info.ex}`);
+    return lines.join('\n');
+  }
+
+  // ===== App State =====
+  let data = [];
+  let idx = 0; // index in full dataset
+  const activeFilter = { unionType: null };
+
+  const els = {
+    mainGrid: $('#mainGrid'),
+    resizerL: $('#resizerL'),
+    resizerR: $('#resizerR'),
+
+    taxFileInput: $('#taxFileInput'),
+    taxUrlInput: $('#taxUrlInput'),
+    taxUrlBtn: $('#taxUrlBtn'),
+    taxInfo: $('#taxInfo'),
+
+    fileInput: $('#fileInput'),
+    datasetInfo: $('#datasetInfo'),
+    sentence: $('#sentence'),
+    statusField: $('#statusField'),
+    unionOriginal: $('#unionOriginal'),
+    unionPreview: $('#unionPreview'),
+    dissentArea: $('#dissentArea'),
+    workArea: $('#workArea'),
+    placeholder: $('#placeholder'),
+    prevBtn: $('#prevBtn'),
+    nextBtn: $('#nextBtn'),
+    nextUnresolvedBtn: $('#nextUnresolvedBtn'),
+    saveBtn: $('#saveBtn'),
+    saveNextBtn: $('#saveNextBtn'),
+    keepAllBtn: $('#keepAllBtn'),
+    removeAllBtn: $('#removeAllBtn'),
+    idxLabel: $('#idxLabel'),
+    resolvedLabel: $('#resolvedLabel'),
+    filterInfo: $('#filterInfo'),
+    barFill: $('#barFill'),
+    downloadBtn: $('#downloadBtn'),
+    clearItemBtn: $('#clearItemBtn'),
+    deleteItemBtn: $('#deleteItemBtn'),
+    jumpInput: $('#jumpInput'),
+    jumpBtn: $('#jumpBtn'),
+    annotatorName: $('#annotatorName'),
+    editUnionBtn: $('#editUnionBtn'),
+    outputFilename: $('#outputFilename'),
+    searchInput: $('#searchInput'),
+    searchBtn: $('#searchBtn'),
+    clearSearchBtn: $('#clearSearchBtn'),
+    searchResults: $('#searchResults'),
+    unionTypeSelect: $('#unionTypeSelect'),
+    applyFilterBtn: $('#applyFilterBtn'),
+    clearFilterBtn: $('#clearFilterBtn'),
+    unionModal: $('#unionModal'),
+    closeUnionModal: $('#closeUnionModal'),
+    editUnionChips: $('#editUnionChips'),
+    addTypeInput: $('#addTypeInput'),
+    addTypeBtn: $('#addTypeBtn'),
+    applyUnionBtn: $('#applyUnionBtn'),
+    resetUnionBtn: $('#resetUnionBtn'),
+    typeList: $('#typeList'),
+    typeRefList: $('#typeRefList'),
+    typeRefMeta: $('#typeRefMeta'),
+  };
+
+  function parseJSONL_UTF8(file) {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const text = reader.result || '';
+        const lines = String(text).split(/\r?\n/).filter(l => l.trim().length);
+        const out = [];
+        for (let i=0; i<lines.length; i++) {
+          try {
+            const obj = JSON.parse(lines[i]);
+            if (!obj || typeof obj !== 'object') continue;
+            obj._id = i;
+            obj.sentence = obj.sentence ?? '';
+            obj.union = Array.isArray(obj.union) ? obj.union.slice() : [];
+            obj.dissent = Array.isArray(obj.dissent) ? obj.dissent.slice() : [];
+            obj.union_original = Array.isArray(obj.union_original) ? obj.union_original.slice() : obj.union.slice();
+            obj.resolution = obj.resolution && typeof obj.resolution === 'object' ? {...obj.resolution} : {};
+            obj.resolved = !!obj.resolved;
+            obj.added_nonoriginal = Array.isArray(obj.added_nonoriginal) ? obj.added_nonoriginal.slice() : [];
+            obj.removed_nondissented = Array.isArray(obj.removed_nondissented) ? obj.removed_nondissented.slice() : [];
+            out.push(obj);
+          } catch(e) {
+            console.warn('Invalid JSON at line', i+1, e);
+          }
+        }
+        resolve(out);
+      };
+      reader.readAsText(file, 'utf-8');
+    });
+  }
+
+  function renderChips(container, arr, diff = null) {
+    container.innerHTML = '';
+    if (!arr || arr.length === 0) {
+      const span = document.createElement('span');
+      span.className = 'muted small';
+      span.textContent = '(empty)';
+      container.appendChild(span);
+      return;
+    }
+    arr.forEach(l => {
+      const span = document.createElement('span');
+      span.className = 'chip tip';
+      const { color } = getTypeInfo(l);
+      span.style.borderColor = color;
+      span.style.color = color;
+      span.style.setProperty('--tipcolor', color);
+      const tip = tooltipText(l);
+      span.setAttribute('data-tip', tip);
+      span.setAttribute('title', tip);
+      span.textContent = l;
+      if (diff && diff.added.has(l)) span.classList.add('added');
+      if (diff && diff.removed.has(l)) span.classList.add('removed');
+      container.appendChild(span);
+    });
+  }
+
+  function applyResolutionToUnion(item) {
+    let union = dedupePreserveOrder(item.union.slice());
+    const res = item.resolution || {};
+    for (const label of Object.keys(res)) {
+      const keep = !!res[label];
+      if (keep) { if (!union.includes(label)) union.push(label); }
+      else { union = union.filter(x => x !== label); }
+    }
+    return union;
+  }
+
+  function decisionsComplete(item) {
+    if (!item.dissent || item.dissent.length === 0) return true;
+    for (const label of item.dissent) if (!(label in (item.resolution||{}))) return false;
+    return true;
+  }
+
+  function autofillDecisionsToCurrentUnion(item) {
+    if (!Array.isArray(item.dissent)) return;
+    item.resolution = item.resolution || {};
+    for (const label of item.dissent) {
+      if (!(label in item.resolution)) item.resolution[label] = item.union.includes(label);
+    }
+  }
+
+  // Compute and store added_nonoriginal and removed_nondissented for an item
+  function computeChangeFields(item) {
+    const orig = Array.isArray(item.union_original) ? item.union_original : [];
+    const diss = Array.isArray(item.dissent) ? item.dissent : [];
+    const curr = Array.isArray(item.union) ? item.union : [];
+
+    const added_nonoriginal = curr.filter(l => !orig.includes(l));
+    const removed_nondissented = orig.filter(l => !curr.includes(l) && !diss.includes(l));
+
+    item.added_nonoriginal = dedupePreserveOrder(added_nonoriginal);
+    item.removed_nondissented = dedupePreserveOrder(removed_nondissented);
+  }
+
+  function getVisibleIndices() {
+    const vis = [];
+    for (let i=0; i<data.length; i++) {
+      if (activeFilter.unionType && !data[i].union.includes(activeFilter.unionType)) continue;
+      vis.push(i);
+    }
+    return vis;
+  }
+
+  function ensureIdxInView() {
+    const vis = getVisibleIndices();
+    if (vis.length === 0) {
+      els.workArea.style.display = 'none';
+      els.placeholder.style.display = '';
+      els.placeholder.textContent = activeFilter.unionType
+        ? 'No items match the current filter. Clear the filter to see all items.'
+        : 'Load a taxonomy and a JSONL file to begin.';
+      renderProgress();
+      return false;
+    }
+    els.placeholder.style.display = 'none';
+    els.workArea.style.display = '';
+    if (!vis.includes(idx)) idx = vis[0];
+    return true;
+  }
+
+  function renderProgress() {
+    const vis = getVisibleIndices();
+    const total = vis.length;
+    const resolved = vis.filter(i => decisionsComplete(data[i])).length;
+    const pos = total ? (vis.indexOf(idx) + 1) : 0;
+    els.idxLabel.textContent = `Item ${pos} / ${total}`;
+    els.resolvedLabel.textContent = `Resolved ${resolved} of ${total}`;
+    els.barFill.style.width = total ? Math.round((resolved/total)*100) + '%' : '0%';
+
+    els.filterInfo.textContent = activeFilter.unionType
+      ? `Filter: union contains “${activeFilter.unionType}”`
+      : 'Filter: none';
+  }
+
+  function renderStatus(item) {
+    if (item.resolved) {
+      const by = item.resolved_by ? ` by ${item.resolved_by}` : '';
+      const when = item.resolved_at ? ` on ${formatDate(item.resolved_at)}` : '';
+      els.statusField.innerHTML = `<span class="badge ok">Resolved</span> <span class="muted small">${by}${when}</span>`;
+    } else {
+      els.statusField.innerHTML = `<span class="badge warn">Unresolved</span>`;
+    }
+  }
+
+  function renderItem() {
+    if (!ensureIdxInView()) return;
+    const item = data[idx];
+
+    els.sentence.textContent = item.sentence || '(no sentence provided)';
+    renderStatus(item);
+
+    renderChips(els.unionOriginal, item.union_original);
+
+    els.dissentArea.innerHTML = '';
+    const diss = item.dissent || [];
+    if (diss.length === 0) {
+      const d = document.createElement('div');
+      d.className = 'muted';
+      d.textContent = 'No dissent labels on this item.';
+      els.dissentArea.appendChild(d);
+    } else {
+      diss.forEach(label => {
+        const row = document.createElement('div');
+        row.className = 'decision';
+
+        const left = document.createElement('div');
+        left.className = 'decision-label tip';
+        const { color } = getTypeInfo(label);
+        left.style.color = color;
+        left.style.setProperty('--tipcolor', color);
+        const tip = tooltipText(label);
+        left.setAttribute('data-tip', tip);
+        left.setAttribute('title', tip);
+        left.textContent = label;
+
+        const right = document.createElement('div');
+        right.className = 'seg';
+
+        const current = (label in item.resolution)
+          ? !!item.resolution[label]
+          : (item.union.includes(label));
+
+        const keepBtn = document.createElement('button');
+        keepBtn.textContent = 'Keep in union';
+        keepBtn.className = 'keep' + (current ? ' active keep' : '');
+
+        const dropBtn = document.createElement('button');
+        dropBtn.textContent = 'Remove';
+        dropBtn.className = 'drop' + (!current ? ' active drop' : '');
+
+        keepBtn.onclick = () => { item.resolution[label] = true; renderItem(); };
+        dropBtn.onclick = () => { item.resolution[label] = false; renderItem(); };
+
+        right.appendChild(keepBtn);
+        right.appendChild(dropBtn);
+        row.appendChild(left);
+        row.appendChild(right);
+        els.dissentArea.appendChild(row);
+      });
+    }
+
+    const preview = applyResolutionToUnion(item);
+    const diff = {
+      added: new Set(preview.filter(l => !item.union_original.includes(l))),
+      removed: new Set(item.union_original.filter(l => !preview.includes(l)))
+    };
+    renderChips(els.unionPreview, preview, diff);
+
+    const vis = getVisibleIndices();
+    const pos = vis.indexOf(idx);
+    els.prevBtn.disabled = (pos <= 0);
+    els.nextBtn.disabled = (pos === -1 || pos >= vis.length - 1);
+    els.nextUnresolvedBtn.disabled = (vis.findIndex((i, k) => k > pos && !decisionsComplete(data[i])) === -1);
+
+    renderProgress();
+  }
+
+  function keepOrRemoveAll(keep) {
+    if (!data.length) return;
+    const item = data[idx];
+    for (const label of (item.dissent || [])) item.resolution[label] = !!keep;
+    renderItem();
+  }
+
+  function saveCurrent() {
+    if (!data.length) return;
+    const item = data[idx];
+
+    // Fill defaults so "no change" still resolves
+    autofillDecisionsToCurrentUnion(item);
+
+    // Apply and mark resolved
+    item.union = applyResolutionToUnion(item);
+    item.resolved = true;
+
+    const name = (els.annotatorName.value || '').trim();
+    if (name) item.resolved_by = name;
+    item.resolved_at = new Date().toISOString();
+
+    // Record change fields
+    computeChangeFields(item);
+
+    if (!ensureIdxInView()) return;
+    renderItem();
+    updateTypeSelectOptions();
+  }
+
+  function nextUnresolved() {
+    const vis = getVisibleIndices();
+    const pos = vis.indexOf(idx);
+    for (let k = pos + 1; k < vis.length; k++) {
+      if (!decisionsComplete(data[vis[k]])) { idx = vis[k]; renderItem(); return; }
+    }
+  }
+
+  function exportJSONL_UTF8() {
+    // Ensure change fields are up to date for all items
+    for (const obj of data) computeChangeFields(obj);
+
+    const lines = data.map(obj => {
+      const out = {
+        sentence: obj.sentence,
+        union: Array.isArray(obj.union) ? obj.union : [],
+        dissent: Array.isArray(obj.dissent) ? obj.dissent : [],
+        union_original: Array.isArray(obj.union_original) ? obj.union_original : [],
+        resolution: obj.resolution || {},
+        resolved: !!obj.resolved,
+        added_nonoriginal: Array.isArray(obj.added_nonoriginal) ? obj.added_nonoriginal : [],
+        removed_nondissented: Array.isArray(obj.removed_nondissented) ? obj.removed_nondissented : [],
+      };
+      if (obj.resolved_by) out.resolved_by = obj.resolved_by;
+      if (obj.resolved_at) out.resolved_at = obj.resolved_at;
+      return JSON.stringify(out);
+    }).join('\n') + '\n';
+
+    const blob = new Blob([lines], { type:'application/x-ndjson; charset=utf-8' });
+    const a = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    a.href = url;
+
+    let fname = (els.outputFilename.value || '').trim();
+    if (!fname) fname = 'resolved.jsonl';
+    if (!/\.jsonl$/i.test(fname)) fname += '.jsonl';
+    a.download = fname;
+
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function deleteCurrentItem() {
+    if (!data.length) return;
+    const ok = confirm('Remove this sentence from the dataset? This action cannot be undone.');
+    if (!ok) return;
+
+    if (els.unionModal.classList.contains('open')) {
+      els.unionModal.classList.remove('open');
+      els.unionModal.setAttribute('aria-hidden','true');
+    }
+
+    data.splice(idx, 1);
+
+    if (data.length === 0) {
+      idx = 0;
+      els.workArea.style.display = 'none';
+      els.placeholder.style.display = '';
+      els.placeholder.textContent = 'Dataset is empty.';
+      renderProgress();
+      return;
+    }
+    const vis = getVisibleIndices();
+    if (vis.length === 0) {
+      els.workArea.style.display = 'none';
+      els.placeholder.style.display = '';
+      els.placeholder.textContent = 'No items match the current filter.';
+      renderProgress();
+      return;
+    }
+    idx = vis[Math.min(vis.length - 1, 0)];
+    renderItem();
+  }
+
+  // ===== Union Editor (modal) =====
+  let editUnionWorking = [];
+
+  function openUnionEditor() {
+    if (!data.length) return;
+    const item = data[idx];
+    editUnionWorking = dedupePreserveOrder(item.union.slice());
+    renderEditableUnionChips();
+    els.unionModal.classList.add('open');
+    els.unionModal.setAttribute('aria-hidden','false');
+    els.addTypeInput.value = '';
+    els.addTypeInput.focus();
+  }
+
+  function renderEditableUnionChips() {
+    const cont = els.editUnionChips;
+    cont.innerHTML = '';
+    if (editUnionWorking.length === 0) {
+      const s = document.createElement('span');
+      s.className = 'muted small';
+      s.textContent = '(union is empty)';
+      cont.appendChild(s);
+      return;
+    }
+    editUnionWorking.forEach((l, i) => {
+      const span = document.createElement('span');
+      span.className = 'chip tip';
+      const { color } = getTypeInfo(l);
+      span.style.borderColor = color;
+      span.style.color = color;
+      span.style.setProperty('--tipcolor', color);
+      const tip = tooltipText(l);
+      span.setAttribute('data-tip', tip);
+      span.setAttribute('title', tip);
+      span.textContent = l;
+
+      const x = document.createElement('span');
+      x.className = 'x';
+      x.textContent = '✕';
+      x.title = 'Remove';
+      x.onclick = () => { editUnionWorking.splice(i,1); renderEditableUnionChips(); };
+      span.appendChild(x);
+
+      cont.appendChild(span);
+    });
+  }
+
+  function closeUnionEditor() {
+    els.unionModal.classList.remove('open');
+    els.unionModal.setAttribute('aria-hidden','true');
+  }
+
+  function normalizeTypeName(s) {
+    if (!s) return '';
+    const t = s.trim();
+    if (!t) return '';
+    const canonical = lookupCanonicalType(t);
+    return canonical || t; // allow custom labels if not in taxonomy
+  }
+
+  function addTypeToWorking(label) {
+    const name = normalizeTypeName(label);
+    if (!name) return;
+    if (!editUnionWorking.includes(name)) {
+      editUnionWorking.push(name);
+      renderEditableUnionChips();
+    }
+    els.addTypeInput.value = '';
+    els.addTypeInput.focus();
+  }
+
+  // ===== Search & Filter =====
+  function rebuildTypeDatalist() {
+    els.typeList.innerHTML = '';
+    const opts = getTypeNames();
+    opts.forEach(opt => { const o = document.createElement('option'); o.value = opt; els.typeList.appendChild(o); });
+  }
+
+  function updateTypeSelectOptions() {
+    const set = new Set(getTypeNames());
+    for (const it of data) for (const u of (it.union || [])) set.add(u);
+    const opts = Array.from(set).sort();
+
+    els.unionTypeSelect.innerHTML = '';
+    const blank = document.createElement('option');
+    blank.value = ''; blank.textContent = '— select type —';
+    els.unionTypeSelect.appendChild(blank);
+    opts.forEach(t => {
+      const o = document.createElement('option');
+      o.value = t; o.textContent = t;
+      els.unionTypeSelect.appendChild(o);
+    });
+  }
+
+  function highlight(text, q) {
+    if (!q) return text;
+    const re = new RegExp(escapeRegExp(q), 'ig');
+    return text.replace(re, m => `<mark>${m}</mark>`);
+  }
+
+  function runSearch() {
+    const q = (els.searchInput.value || '').trim();
+    if (!q) { els.searchResults.style.display = 'none'; els.searchResults.innerHTML = ''; return; }
+    const items = [];
+    for (let i=0; i<data.length; i++) {
+      const s = data[i].sentence || '';
+      if (s.toLowerCase().includes(q.toLowerCase())) items.push({ i, s });
+    }
+    if (items.length === 0) {
+      els.searchResults.style.display = '';
+      els.searchResults.innerHTML = `<div class="muted small" style="padding:6px;">No matches.</div>`;
+      return;
+    }
+    els.searchResults.style.display = '';
+    els.searchResults.innerHTML = items.map((r) => {
+      const resolved = data[r.i].resolved ? '<span class="badge ok">Resolved</span>' : '<span class="badge warn">Unresolved</span>';
+      return `<div class="result" data-i="${r.i}">
+        <div class="meta">#${r.i+1} ${resolved}</div>
+        <div class="snippet">${highlight(r.s, q)}</div>
+      </div>`;
+    }).join('');
+    els.searchResults.querySelectorAll('.result').forEach(div => {
+      div.addEventListener('click', () => {
+        idx = parseInt(div.getAttribute('data-i'), 10);
+        renderItem();
+      });
+    });
+  }
+
+  function applyFilter() {
+    const val = els.unionTypeSelect.value.trim();
+    activeFilter.unionType = val || null;
+    if (!ensureIdxInView()) return;
+    renderItem();
+  }
+  function clearFilter() {
+    activeFilter.unionType = null;
+    if (!ensureIdxInView()) return;
+    renderItem();
+  }
+
+  // ===== Type Reference (right column) =====
+  function renderTypeReference() {
+    const cont = els.typeRefList;
+    cont.innerHTML = '';
+
+    const typeNames = Object.keys(TAXONOMY.types);
+    if (typeNames.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'muted small';
+      empty.textContent = 'No taxonomy loaded. Load a taxonomy JSON file to see types here.';
+      cont.appendChild(empty);
+      els.typeRefMeta.textContent = 'No taxonomy loaded.';
+      return;
+    }
+
+    // Restore collapsed state
+    let collapsed = {};
+    try { collapsed = JSON.parse(localStorage.getItem('ref_collapsed') || '{}') || {}; } catch {}
+
+    const groupsOrder = TAXONOMY.groupOrder && TAXONOMY.groupOrder.length
+      ? TAXONOMY.groupOrder.slice()
+      : Object.keys(TAXONOMY.groups).sort((a,b)=>a.localeCompare(b));
+
+    const byGroup = new Map();
+    for (const g of groupsOrder) byGroup.set(g, []);
+    for (const name of typeNames.sort((a,b)=>a.localeCompare(b))) {
+      const g = TAXONOMY.types[name].group || 'Other';
+      if (!byGroup.has(g)) byGroup.set(g, []);
+      byGroup.get(g).push(name);
+    }
+
+    const renderGroup = (groupName) => {
+      const items = byGroup.get(groupName) || [];
+      if (!items.length) return;
+
+      const gColor = TAXONOMY.groups[groupName]?.color || stringToColor(groupName);
+      const wrapper = document.createElement('div');
+      wrapper.className = 'group' + (collapsed[groupName] ? ' collapsed' : '');
+
+      const hdr = document.createElement('div');
+      hdr.className = 'group-hdr';
+      hdr.style.borderLeft = `4px solid ${gColor}`;
+
+      const left = document.createElement('div');
+      left.style.display = 'flex';
+      left.style.alignItems = 'center';
+      const arrow = document.createElement('span');
+      arrow.className = 'arrow';
+      arrow.textContent = '▾';
+      const title = document.createElement('span');
+      title.textContent = ` ${groupName}`;
+      left.appendChild(arrow);
+      left.appendChild(title);
+
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      meta.textContent = `${items.length} type${items.length===1?'':'s'}`;
+
+      hdr.appendChild(left);
+      hdr.appendChild(meta);
+
+      const body = document.createElement('div');
+      body.className = 'group-items';
+
+      items.forEach(name => {
+        const { color, def, ex } = getTypeInfo(name);
+        const row = document.createElement('div');
+        row.className = 'ref-type';
+
+        const nm = document.createElement('div');
+        nm.className = 'ref-name';
+        nm.style.color = color;
+        nm.textContent = name;
+
+        const df = document.createElement('div');
+        df.className = 'ref-def';
+        df.textContent = def;
+
+        const eg = document.createElement('div');
+        eg.className = 'ref-ex';
+        eg.textContent = ex ? `Example: ${ex}` : '';
+
+        row.appendChild(nm);
+        if (def) row.appendChild(df);
+        if (ex) row.appendChild(eg);
+
+        body.appendChild(row);
+      });
+
+      hdr.addEventListener('click', () => {
+        wrapper.classList.toggle('collapsed');
+        collapsed[groupName] = wrapper.classList.contains('collapsed');
+        try { localStorage.setItem('ref_collapsed', JSON.stringify(collapsed)); } catch {}
+      });
+
+      wrapper.appendChild(hdr);
+      wrapper.appendChild(body);
+      cont.appendChild(wrapper);
+    };
+
+    for (const g of groupsOrder) renderGroup(g);
+    for (const g of Array.from(byGroup.keys()).filter(x=>!groupsOrder.includes(x))) renderGroup(g);
+
+    renderTaxInfo();
+  }
+
+  // ===== Resizable columns =====
+  (function setupResizers(){
+    const RES_W = 6;
+    const MIN_LEFT = 260;
+    const MIN_CENTER = 520;
+    const MIN_RIGHT = 320;
+
+    let leftW = parseInt(localStorage.getItem('col_left') || '360', 10);
+    let rightW = parseInt(localStorage.getItem('col_right') || '420', 10);
+
+    function applyCols() {
+      els.mainGrid.style.gridTemplateColumns = `${leftW}px ${RES_W}px 1fr ${RES_W}px ${rightW}px`;
+    }
+
+    function clampAndApply() {
+      const rect = els.mainGrid.getBoundingClientRect();
+      const total = rect.width;
+      const maxLeft = total - RES_W*2 - rightW - MIN_CENTER;
+      leftW = Math.max(MIN_LEFT, Math.min(leftW, maxLeft));
+
+      const maxRight = total - RES_W*2 - leftW - MIN_CENTER;
+      rightW = Math.max(MIN_RIGHT, Math.min(rightW, maxRight));
+
+      applyCols();
+    }
+
+    clampAndApply();
+    window.addEventListener('resize', clampAndApply);
+
+    function startDrag(handle, which, startClientX) {
+      handle.classList.add('active');
+      const startLeft = leftW;
+      const startRight = rightW;
+      const total = els.mainGrid.getBoundingClientRect().width;
+
+      function onMove(ev) {
+        const clientX = ev.touches ? ev.touches[0].clientX : ev.clientX;
+        const delta = clientX - startClientX;
+        if (which === 'left') {
+          let newLeft = startLeft + delta;
+          const maxLeft = total - RES_W*2 - rightW - MIN_CENTER;
+          newLeft = Math.max(MIN_LEFT, Math.min(newLeft, maxLeft));
+          leftW = newLeft;
+        } else {
+          let newRight = startRight + delta; // moving right increases right panel
+          const maxRight = total - RES_W*2 - leftW - MIN_CENTER;
+          newRight = Math.max(MIN_RIGHT, Math.min(newRight, maxRight));
+          rightW = newRight;
+        }
+        applyCols();
+      }
+
+      function onUp() {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.removeEventListener('touchmove', onMove);
+        document.removeEventListener('touchend', onUp);
+        handle.classList.remove('active');
+        try {
+          localStorage.setItem('col_left', String(Math.round(leftW)));
+          localStorage.setItem('col_right', String(Math.round(rightW)));
+        } catch {}
+      }
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+      document.addEventListener('touchmove', onMove, { passive:false });
+      document.addEventListener('touchend', onUp);
+    }
+
+    els.resizerL.addEventListener('mousedown', (e)=> startDrag(els.resizerL, 'left', e.clientX));
+    els.resizerL.addEventListener('touchstart', (e)=> {
+      const x = e.touches[0].clientX;
+      startDrag(els.resizerL, 'left', x);
+      e.preventDefault();
+    }, { passive:false });
+
+    els.resizerR.addEventListener('mousedown', (e)=> startDrag(els.resizerR, 'right', e.clientX));
+    els.resizerR.addEventListener('touchstart', (e)=> {
+      const x = e.touches[0].clientX;
+      startDrag(els.resizerR, 'right', x);
+      e.preventDefault();
+    }, { passive:false });
+  })();
+
+  // ===== Wiring =====
+
+  // Try to restore last taxonomy from localStorage
+  (function initTaxonomy() {
+    try {
+      const saved = localStorage.getItem('taxonomy_raw');
+      if (saved) {
+        const raw = JSON.parse(saved);
+        setTaxonomy(raw);
+      } else {
+        renderTypeReference();
+      }
+    } catch {
+      renderTypeReference();
+    }
+    rebuildTypeDatalist(); // empty until taxonomy loads
+  })();
+
+  // Load taxonomy: file
+  els.taxFileInput.addEventListener('change', async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const json = JSON.parse(text);
+      setTaxonomy(json);
+    } catch (err) {
+      alert('Failed to read taxonomy JSON file.');
+      console.error(err);
+    }
+  });
+
+  // Load taxonomy: URL
+  els.taxUrlBtn.addEventListener('click', async () => {
+    const url = (els.taxUrlInput.value || '').trim();
+    if (!url) return;
+    try {
+      const res = await fetch(url, { cache:'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      setTaxonomy(json);
+    } catch (err) {
+      alert('Failed to fetch taxonomy from URL. Check CORS and URL.');
+      console.error(err);
+    }
+  });
+
+  // File loader (UTF‑8) for dataset
+  els.fileInput.addEventListener('change', async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    data = await parseJSONL_UTF8(file);
+    idx = 0;
+
+    const base = file.name.replace(/\.[^.]+$/,'');
+    els.outputFilename.value = `${base}.resolved.jsonl`;
+
+    updateTypeSelectOptions();
+
+    const hasData = data.length > 0;
+    els.datasetInfo.style.display = hasData ? '' : 'none';
+    if (!hasData) {
+      els.workArea.style.display = 'none';
+      els.placeholder.style.display = '';
+      els.placeholder.textContent = 'No valid items loaded.';
+      return;
+    }
+    activeFilter.unionType = null;
+    renderItem();
+  });
+
+  // Navigation
+  els.prevBtn.onclick = () => {
+    const vis = getVisibleIndices();
+    const pos = vis.indexOf(idx);
+    if (pos > 0) { idx = vis[pos - 1]; renderItem(); }
+  };
+  els.nextBtn.onclick = () => {
+    const vis = getVisibleIndices();
+    const pos = vis.indexOf(idx);
+    if (pos >= 0 && pos < vis.length - 1) { idx = vis[pos + 1]; renderItem(); }
+  };
+  els.nextUnresolvedBtn.onclick = nextUnresolved;
+
+  // Bulk decisions
+  els.keepAllBtn.onclick = () => keepOrRemoveAll(true);
+  els.removeAllBtn.onclick = () => keepOrRemoveAll(false);
+
+  // Save
+  els.saveBtn.onclick = saveCurrent;
+  els.saveNextBtn.onclick = () => {
+    saveCurrent();
+    const vis = getVisibleIndices();
+    const pos = vis.indexOf(idx);
+    if (pos >= 0 && pos < vis.length - 1) { idx = vis[pos + 1]; renderItem(); }
+  };
+
+  // Export
+  els.downloadBtn.onclick = exportJSONL_UTF8;
+
+  // Clear decisions
+  els.clearItemBtn.onclick = () => {
+    if (!data.length) return;
+    const item = data[idx];
+    item.resolution = {};
+    item.resolved = false;
+    item.added_nonoriginal = [];
+    item.removed_nondissented = [];
+    renderItem();
+  };
+
+  // Delete item
+  els.deleteItemBtn.onclick = deleteCurrentItem;
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Delete' && e.shiftKey && data.length) { e.preventDefault(); deleteCurrentItem(); }
+  });
+
+  // Jump
+  els.jumpBtn.onclick = () => {
+    const v = parseInt(els.jumpInput.value, 10);
+    if (!Number.isFinite(v) || v < 1 || v > data.length) return;
+    idx = v - 1;
+    renderItem();
+  };
+
+  // Union editor
+  els.editUnionBtn.onclick = openUnionEditor;
+  els.closeUnionModal.onclick = closeUnionEditor;
+  els.applyUnionBtn.onclick = () => {
+    if (!data.length) return;
+    const item = data[idx];
+    item.union = dedupePreserveOrder(editUnionWorking.slice());
+    renderItem();
+    updateTypeSelectOptions();
+    closeUnionEditor();
+  };
+  els.resetUnionBtn.onclick = () => {
+    if (!data.length) return;
+    const item = data[idx];
+    editUnionWorking = item.union_original.slice();
+    renderEditableUnionChips();
+  };
+  els.addTypeBtn.onclick = () => addTypeToWorking(els.addTypeInput.value);
+  els.addTypeInput.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') { ev.preventDefault(); addTypeToWorking(els.addTypeInput.value); }
+  });
+  els.unionModal.addEventListener('click', (e) => {
+    if (e.target === els.unionModal) closeUnionEditor();
+  });
+
+  // Search/filter events
+  els.searchBtn.onclick = runSearch;
+  els.clearSearchBtn.onclick = () => { els.searchInput.value=''; els.searchResults.style.display='none'; els.searchResults.innerHTML=''; };
+  els.searchInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); runSearch(); } });
+
+  els.applyFilterBtn.onclick = applyFilter;
+  els.clearFilterBtn.onclick = clearFilter;
+</script>
+</body>
+</html>
