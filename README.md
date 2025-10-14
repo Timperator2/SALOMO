@@ -2,6 +2,8 @@
 
 An annotation tool that reduces human workload in multi-label tasks by using a committee of LLMs to pre-select labels.
 
+<img width="1920" height="918" alt="SALOMO-screen" src="https://github.com/user-attachments/assets/82effa49-4997-4e42-aa62-d3b131e3d139" />
+
 # Quick Start
 
 - Download this repository (or just the index.html file).
@@ -58,6 +60,7 @@ Example:
     "Type 4": {"group": "Group C", "definition": "This is the definition of Type 4.", "example": "This is an example for Type 4."}
   }
 }
+
 ```
 
 # How to annotate
