@@ -136,26 +136,105 @@
     .ref-name { font-weight:700; }
     .ref-def { margin-top:6px; font-size:13px; color:#dbe3ef; }
     .ref-ex { margin-top:6px; font-size:12px; color:#9aa8c0; font-style:italic; }
+
+    /* Sentence translation */
+    .sentence-toolbar { display:flex; gap:8px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
+    .sentence-hover-target { cursor: help; }
+    .translation-toggle { display:inline-flex; align-items:center; gap:8px; }
+    .translation-hint { font-size:12px; color:var(--muted); }
+    .translation-panel { margin-top:10px; }
+    .translation-panel.compact { display:none; }
+    #hoverTooltip {
+      position: fixed; z-index: 1000; max-width: 380px;
+      border-radius: 12px; padding: 12px 14px;
+      background:#020617; color:#e5e7eb; border:1px solid #334155;
+      box-shadow:0 18px 50px rgba(0,0,0,.45);
+      opacity:0; pointer-events:none; transform:translateY(6px);
+      transition:opacity .12s ease, transform .12s ease;
+      white-space:normal;
+    }
+    #hoverTooltip.show { opacity:1; transform:translateY(0); }
+
+    /* Gamification */
+    .gamebar {
+      background:#0b1220; border:1px solid var(--border); border-radius:12px; padding:14px 16px;
+      display:flex; gap:16px; align-items:center; justify-content:space-between; flex-wrap:wrap;
+    }
+    .gamebar.compact .game-stat { display:none; }
+    .gamebar.compact .game-icon { display:none; }
+    .gamebar.compact .game-title { display:none; }
+    .gamebar.compact .xp-track { display:none; }
+    .gamebar.compact #gameXpText { display:none; }
+    .gamebar.compact #gameResetBtn { display:none; }
+    .gamebar.compact #gameLevelMeta { display:none; }
+    .gamebar.compact .gamebar-main { gap:10px; }
+    .gamebar-main { display:flex; gap:14px; align-items:center; flex-wrap:wrap; }
+    .game-icon { font-size:28px; }
+    .game-title { font-weight:700; }
+    .game-meta { font-size:12px; color:var(--muted); }
+    .game-stats { display:flex; gap:16px; align-items:center; flex-wrap:wrap; }
+    .game-stat strong { display:block; font-size:16px; color:var(--text); }
+    .game-stat span { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; }
+    .xp-track { width:min(240px, 60vw); height:8px; border-radius:999px; overflow:hidden; background:#020617; border:1px solid var(--border); }
+    .xp-fill { height:100%; width:0%; background:linear-gradient(90deg, #f59e0b, #06b6d4); transition:width .45s ease; }
+    .xp-popup {
+      position: fixed; z-index: 1200; font-weight:800; color:#fbbf24;
+      text-shadow:0 2px 10px rgba(0,0,0,.45); pointer-events:none;
+      animation: xpFloat 1.4s ease-out forwards;
+    }
+    @keyframes xpFloat {
+      0% { opacity:1; transform:translateY(0) scale(1); }
+      100% { opacity:0; transform:translateY(-64px) scale(.92); }
+    }
+    #confettiCanvas {
+      position:fixed; inset:0; pointer-events:none; z-index:1100; opacity:0; transition:opacity .15s ease;
+    }
+    #confettiCanvas.active { opacity:1; }
+    #levelUpModal .content { max-width:460px; text-align:center; }
+    .level-icon { font-size:44px; }
+
+    .toast {
+      position:fixed; right:18px; bottom:18px; z-index:1300;
+      min-width:220px; max-width:360px; border-radius:12px; padding:12px 14px;
+      color:white; box-shadow:0 18px 50px rgba(0,0,0,.35);
+      opacity:0; transform:translateY(10px); pointer-events:none;
+      transition:opacity .18s ease, transform .18s ease;
+    }
+    .toast.show { opacity:1; transform:translateY(0); }
+
+    .aux-field { gap:10px; }
+    .aux-title { font-weight:700; }
+    .aux-desc { font-size:12px; color:var(--muted); }
+    .aux-slider-row { display:flex; align-items:center; gap:12px; }
+    .aux-slider-row input[type="range"] { flex:1; }
+    .aux-slider-label { font-size:12px; color:var(--muted); min-width:48px; }
+    .aux-slider-value { min-width:54px; text-align:right; font-size:12px; color:#cbd5e1; }
+    textarea {
+      background:#0b1220; color:var(--text); border:1px solid var(--border);
+      border-radius:8px; padding:10px; width:100%; min-height:100px; resize:vertical;
+      font:inherit;
+    }
+    .task-content { white-space:pre-wrap; line-height:1.6; color:#dbe3ef; }
   </style>
 </head>
 <body>
 <header>
   <h1>SALOMO</h1>
-  <div class="muted">Load your taxonomy file (JSON), then load a dataset. Keep/remove dissent labels into union, edit union, search, filter, delete, and export.</div>
+  <div class="muted">Load your taxonomy and config file (JSON), then load a dataset. Keep/remove dissent labels into union, edit union, search, filter, delete, and export.</div>
 </header>
 
 <main id="mainGrid">
   <!-- Left: Controls -->
   <aside class="stack leftbar">
 
-    <!-- New: Load Taxonomy -->
+    <!-- Load Taxonomy + Config -->
     <div class="stack panel">
-      <div style="font-weight:600;">Load Taxonomy (JSON)</div>
+      <div style="font-weight:600;">Load Taxonomy + Config (JSON)</div>
       <label class="small muted">Choose file</label>
       <input type="file" id="taxFileInput" accept=".json,.txt,.jsonc" />
       <div class="muted small">Or fetch from URL</div>
       <div class="row">
-        <input id="taxUrlInput" type="text" placeholder="https://example.com/taxonomy.json" />
+        <input id="taxUrlInput" type="text" placeholder="https://example.com/taxonomy-and-config.json" />
         <button id="taxUrlBtn">Fetch</button>
       </div>
       <div id="taxInfo" class="muted small"></div>
@@ -229,12 +308,60 @@
   <!-- Center: Work area -->
   <section class="stack-lg">
     <div id="workArea" style="display:none;">
-      <div class="panel stack">
-        <div class="row" style="justify-content:space-between; align-items:center;">
-          <div class="muted small">Sentence</div>
-          <div id="statusField" class="small"></div>
+      <div id="gameBar" class="gamebar">
+        <div class="gamebar-main">
+          <div id="gameLevelIcon" class="game-icon">🌱</div>
+          <div class="stack" style="gap:6px;">
+            <div class="game-title" id="gameLevelTitle">Beginner Annotator</div>
+            <div class="row" style="gap:10px; align-items:center;">
+              <div class="xp-track"><div id="xpFill" class="xp-fill"></div></div>
+              <div id="gameXpText" class="game-meta">0 XP</div>
+            </div>
+            <div id="gameLevelMeta" class="game-meta">Level 1</div>
+          </div>
         </div>
-        <div id="sentence" class="sentence"></div>
+        <div class="game-stats">
+          <div class="game-stat"><strong id="gameAnnotations">0</strong><span>Annotations</span></div>
+          <div class="game-stat"><strong id="gameStreak">0</strong><span>Streak</span></div>
+          <div class="row">
+            <button id="gameToggleBtn">Gamification On</button>
+            <button id="gameResetBtn">Reset Progress</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel stack">
+        <div class="sentence-toolbar">
+          <div class="muted small">Sentence</div>
+          <div class="row">
+            <button id="taskInfoBtn" type="button">Task</button>
+            <button id="extraOptionsCollapseBtn" type="button">Hide Extra Options</button>
+            <div id="statusField" class="small"></div>
+          </div>
+        </div>
+        <div id="translationPanel" class="translation-panel">
+          <div class="row">
+            <label class="translation-toggle small muted" for="translationLangSelect">
+              <span>Translation target</span>
+              <select id="translationLangSelect" style="width:auto;">
+                <option value="en">English</option>
+                <option value="zh">中文（简体）</option>
+                <option value="hi">हिन्दी</option>
+                <option value="es">Español</option>
+                <option value="fr">Français</option>
+                <option value="ar">العربية</option>
+                <option value="bn">বাংলা</option>
+                <option value="pt">Português</option>
+                <option value="ru">Русский</option>
+                <option value="id">Bahasa Indonesia</option>
+                <option value="de">Deutsch</option>
+              </select>
+            </label>
+            <button id="translationToggleBtn" type="button">Hover translation On</button>
+          </div>
+        </div>
+        <div id="sentence" class="sentence sentence-hover-target"></div>
+        <div id="translationHint" class="translation-hint">Hover the sentence to preview a translation when it is in another language.</div>
       </div>
 
       <div class="grid">
@@ -264,6 +391,11 @@
         <div id="dissentArea" class="stack"></div>
       </div>
 
+      <div id="auxFieldsPanel" class="panel stack" style="display:none;">
+        <div class="muted small">Additional annotation fields</div>
+        <div id="auxFieldsArea" class="stack"></div>
+      </div>
+
       <div class="footer">
         <button id="deleteItemBtn" class="warn" title="Remove this sentence from the dataset">Remove sentence from dataset</button>
         <button id="clearItemBtn">Clear decisions (this item)</button>
@@ -274,7 +406,7 @@
     </div>
 
     <div id="placeholder" class="panel muted">
-      Load a taxonomy in the left panel, then load a JSONL file to begin.
+      Load a taxonomy and config file in the left panel, then load a JSONL file to begin.
     </div>
   </section>
 
@@ -325,6 +457,41 @@
   </div>
 </div>
 
+<div id="hoverTooltip" aria-hidden="true"></div>
+<div id="toast" class="toast" aria-live="polite"></div>
+<canvas id="confettiCanvas"></canvas>
+
+<div id="levelUpModal" class="modal" aria-hidden="true">
+  <div class="content">
+    <div class="stack" style="gap:10px;">
+      <div id="levelUpIcon" class="level-icon">🌱</div>
+      <div class="muted small">Level Up</div>
+      <div id="levelUpTitle" style="font-weight:700; font-size:24px;">Type Spotter</div>
+      <div id="levelUpMeta" class="muted">Level 2</div>
+      <div id="levelUpDesc" class="muted" style="font-size:14px;">You are making great progress.</div>
+      <div class="footer" style="justify-content:center; margin-top:8px;">
+        <button id="levelUpCloseBtn" class="primary">Nice</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="taskModal" class="modal" aria-hidden="true">
+  <div class="content">
+    <div class="header">
+      <div>
+        <div style="font-weight:700;">Task Description</div>
+        <div class="muted small">Instructions for this annotation setup.</div>
+      </div>
+      <button id="closeTaskModal">âœ•</button>
+    </div>
+    <div id="taskModalContent" class="task-content"></div>
+    <div class="footer">
+      <button id="taskModalCloseBtn" class="primary">Close</button>
+    </div>
+  </div>
+</div>
+
 <script>
   // ===== Helpers =====
   const $ = sel => document.querySelector(sel);
@@ -332,6 +499,7 @@
   function dedupePreserveOrder(arr) { const seen=new Set(), out=[]; for (const x of arr) if (!seen.has(x)) { seen.add(x); out.push(x); } return out; }
   function escapeRegExp(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
   function formatDate(iso) { if (!iso) return ''; try { return new Date(iso).toLocaleString(); } catch { return iso; } }
+  function escapeHtml(v) { return String(v).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 
   // Deterministic fallback color from string
   function stringToColor(str) {
@@ -342,13 +510,50 @@
     return `hsl(${hue}deg ${sat}% ${lit}%)`;
   }
 
+  const SENTENCE_TRANSLATION_STORAGE_KEY = 'salomo_sentence_hover_translate';
+  const TRANSLATION_LANGUAGE_STORAGE_KEY = 'salomo_translation_target_lang';
+  const GAMIFICATION_STORAGE_KEY = 'salomo_gamification';
+  const EXTRA_OPTIONS_COLLAPSED_STORAGE_KEY = 'salomo_extra_options_collapsed';
+  const NLLB_SPACES = [
+    'https://timperator-nllb-api.hf.space',
+    'https://winstxnhdw-nllb-api.hf.space'
+  ];
+  const LANGUAGE_CONFIG = {
+    en: { nllb: 'eng_Latn', aliases: ['en', 'eng'] },
+    zh: { nllb: 'zho_Hans', aliases: ['zh', 'zho', 'cmn', 'chi', 'zh-cn', 'zh-hans'] },
+    hi: { nllb: 'hin_Deva', aliases: ['hi', 'hin'] },
+    es: { nllb: 'spa_Latn', aliases: ['es', 'spa'] },
+    fr: { nllb: 'fra_Latn', aliases: ['fr', 'fra', 'fre'] },
+    ar: { nllb: 'arb_Arab', aliases: ['ar', 'ara', 'arb'] },
+    bn: { nllb: 'ben_Beng', aliases: ['bn', 'ben'] },
+    pt: { nllb: 'por_Latn', aliases: ['pt', 'por', 'pt-br', 'pt-pt'] },
+    ru: { nllb: 'rus_Cyrl', aliases: ['ru', 'rus'] },
+    id: { nllb: 'ind_Latn', aliases: ['id', 'ind', 'in'] },
+    de: { nllb: 'deu_Latn', aliases: ['de', 'deu', 'ger'] }
+  };
+  const DEFAULT_LEVELS = [
+    { xp: 0, title: 'Beginner Annotator', icon: '🌱', desc: 'Welcome! Start annotating sentences to level up.' },
+    { xp: 50, title: 'Type Spotter', icon: '👁️', desc: 'You are spotting patterns with confidence.' },
+    { xp: 150, title: 'Bias Detective', icon: '🔍', desc: 'Your review decisions are getting sharper.' },
+    { xp: 300, title: 'Bias Hunter', icon: '🎯', desc: 'You are moving through difficult items with precision.' },
+    { xp: 500, title: 'Expert Scanner', icon: '⭐', desc: 'You are becoming a reliable expert annotator.' },
+    { xp: 800, title: 'Master Annotator', icon: '🏆', desc: 'Strong work. Your annotation streak is impressive.' },
+    { xp: 1200, title: 'Bias Sage', icon: '🧙', desc: 'You consistently catch nuanced label decisions.' },
+    { xp: 2000, title: 'Grand Annotator', icon: '👑', desc: 'A major contributor to this annotation session.' },
+    { xp: 3500, title: 'Bias Legend', icon: '💎', desc: 'Legendary annotation energy.' },
+  ];
+
   // ===== Taxonomy state (loaded from external file or URL) =====
   let TAXONOMY = {
     meta: { name:'', version:'', description:'' },
     groups: {},          // groupName -> { color, description?, ... }
     groupOrder: [],      // optional order from file; fallback alphabetical
     types: {},           // typeName -> { group, def, ex, color?, aliases?[] }
-    aliases: {}          // lower(alias) -> canonicalTypeName
+    aliases: {},         // lower(alias) -> canonicalTypeName
+    annotationOptions: { slider: null, text: null },
+    gamification: null,
+    taskDescription: '',
+    translation: { autoTranslate: null }
   };
 
   function normalizeTaxonomy(raw) {
@@ -361,7 +566,11 @@
       groups: {},
       groupOrder: [],
       types: {},
-      aliases: {}
+      aliases: {},
+      annotationOptions: { slider: null, text: null },
+      gamification: null,
+      taskDescription: '',
+      translation: { autoTranslate: null }
     };
 
     // Read groups
@@ -432,6 +641,15 @@
     // Deduplicate order
     out.groupOrder = dedupePreserveOrder(out.groupOrder);
 
+    const sliderCfg = raw.annotationOptions?.slider || raw.customFields?.slider || raw.sliderField || null;
+    const textCfg = raw.annotationOptions?.text || raw.customFields?.text || raw.textField || null;
+
+    out.annotationOptions.slider = normalizeSliderOption(sliderCfg);
+    out.annotationOptions.text = normalizeTextOption(textCfg);
+    out.gamification = normalizeGamificationConfig(raw.gamification || raw.gamificationConfig || null);
+    out.taskDescription = String(raw.taskDescription || raw.instructions || raw.task?.description || '').trim();
+    out.translation.autoTranslate = typeof raw.translation?.autoTranslate === 'boolean' ? raw.translation.autoTranslate : null;
+
     return out;
   }
 
@@ -440,14 +658,20 @@
       TAXONOMY = normalizeTaxonomy(raw);
       try { localStorage.setItem('taxonomy_raw', JSON.stringify(raw)); } catch {}
     } catch(e) {
-      alert('Failed to parse taxonomy file.');
+      alert('Failed to parse taxonomy and config file.');
       console.error(e);
       return;
+    }
+    if (typeof TAXONOMY.translation?.autoTranslate === 'boolean') {
+      sentenceTranslation.enabled = TAXONOMY.translation.autoTranslate;
+      try { localStorage.setItem(SENTENCE_TRANSLATION_STORAGE_KEY, sentenceTranslation.enabled ? 'true' : 'false'); } catch {}
     }
     renderTypeReference();
     rebuildTypeDatalist();
     updateTypeSelectOptions();
     renderTaxInfo();
+    renderGamification();
+    updateTaskButton();
     // Repaint current item (colors/defs may improve now)
     if (data.length) renderItem();
   }
@@ -494,10 +718,635 @@
     return lines.join('\n');
   }
 
+  function normalizeSliderOption(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const name = String(raw.name || raw.label || '').trim();
+    const leftLabel = String(raw.leftLabel || raw.left || '').trim();
+    const rightLabel = String(raw.rightLabel || raw.right || '').trim();
+    if (!name || !leftLabel || !rightLabel) return null;
+    const min = Number(raw.min);
+    const max = Number(raw.max);
+    if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) return null;
+    const step = Number(raw.step);
+    const defaultValueRaw = raw.default ?? raw.defaultValue ?? min;
+    const defaultValue = Number.isFinite(Number(defaultValueRaw)) ? Number(defaultValueRaw) : min;
+    return {
+      key: String(raw.key || 'numeric_value').trim(),
+      name,
+      min,
+      max,
+      step: Number.isFinite(step) && step > 0 ? step : 0.01,
+      leftLabel,
+      rightLabel,
+      defaultValue: Math.min(max, Math.max(min, defaultValue)),
+      required: raw.required === true
+    };
+  }
+
+  function normalizeTextOption(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const name = String(raw.name || raw.label || '').trim();
+    const description = String(raw.description || raw.helpText || '').trim();
+    const maxChars = Number(raw.maxChars ?? raw.maxLength ?? raw.charLimit);
+    if (!name || !description || !Number.isFinite(maxChars) || maxChars <= 0) return null;
+    return {
+      key: String(raw.key || 'free_text').trim(),
+      name,
+      description,
+      placeholder: String(raw.placeholder || '').trim(),
+      maxChars: Math.round(maxChars),
+      required: raw.required === true
+    };
+  }
+
+  function normalizeGamificationConfig(raw) {
+    const fallback = {
+      timeBasedXp: { min: 10, max: 25, baseSeconds: 25, unionSeconds: 5, dissentSeconds: 10 },
+      fieldXp: { slider: 6, text: 12 },
+      streakBonuses: [
+        { streak: 3, multiplier: 1.1 },
+        { streak: 5, multiplier: 1.25 },
+        { streak: 10, multiplier: 1.5 }
+      ],
+      levels: DEFAULT_LEVELS.slice()
+    };
+    if (!raw || typeof raw !== 'object') return fallback;
+
+    const timeBasedXp = {
+      min: Number.isFinite(Number(raw.timeBasedXp?.min)) ? Number(raw.timeBasedXp.min) : fallback.timeBasedXp.min,
+      max: Number.isFinite(Number(raw.timeBasedXp?.max)) ? Number(raw.timeBasedXp.max) : fallback.timeBasedXp.max,
+      baseSeconds: Number.isFinite(Number(raw.timeBasedXp?.baseSeconds)) ? Number(raw.timeBasedXp.baseSeconds) : fallback.timeBasedXp.baseSeconds,
+      unionSeconds: Number.isFinite(Number(raw.timeBasedXp?.unionSeconds)) ? Number(raw.timeBasedXp.unionSeconds) : fallback.timeBasedXp.unionSeconds,
+      dissentSeconds: Number.isFinite(Number(raw.timeBasedXp?.dissentSeconds)) ? Number(raw.timeBasedXp.dissentSeconds) : fallback.timeBasedXp.dissentSeconds
+    };
+
+    const fieldXp = {
+      slider: Number.isFinite(Number(raw.fieldXp?.slider)) ? Number(raw.fieldXp.slider) : fallback.fieldXp.slider,
+      text: Number.isFinite(Number(raw.fieldXp?.text)) ? Number(raw.fieldXp.text) : fallback.fieldXp.text
+    };
+
+    const streakBonuses = Array.isArray(raw.streakBonuses) && raw.streakBonuses.length
+      ? raw.streakBonuses
+          .map(entry => ({ streak: Number(entry.streak), multiplier: Number(entry.multiplier) }))
+          .filter(entry => Number.isFinite(entry.streak) && entry.streak > 0 && Number.isFinite(entry.multiplier) && entry.multiplier >= 1)
+          .sort((a, b) => a.streak - b.streak)
+      : fallback.streakBonuses;
+
+    const levels = Array.isArray(raw.levels) && raw.levels.length
+      ? raw.levels
+          .map(level => ({
+            xp: Number(level.xp),
+            title: String(level.title || '').trim(),
+            icon: String(level.icon || '⭐'),
+            desc: String(level.desc || level.description || '').trim()
+          }))
+          .filter(level => Number.isFinite(level.xp) && level.xp >= 0 && level.title)
+          .sort((a, b) => a.xp - b.xp)
+      : fallback.levels;
+
+    return {
+      timeBasedXp,
+      fieldXp,
+      streakBonuses: streakBonuses.length ? streakBonuses : fallback.streakBonuses,
+      levels: levels.length ? levels : fallback.levels
+    };
+  }
+
+  function getActiveGamificationConfig() {
+    return TAXONOMY.gamification || normalizeGamificationConfig(null);
+  }
+
+  function getSliderOption() {
+    return TAXONOMY.annotationOptions?.slider || null;
+  }
+
+  function getTextOption() {
+    return TAXONOMY.annotationOptions?.text || null;
+  }
+
+  function getDefaultCustomFields() {
+    const fields = {};
+    const slider = getSliderOption();
+    const text = getTextOption();
+    if (slider) fields[slider.key] = slider.defaultValue;
+    if (text) fields[text.key] = '';
+    return fields;
+  }
+
+  function getExportAuxiliaryFields(item) {
+    const out = {};
+    const slider = getSliderOption();
+    const text = getTextOption();
+    if (slider) out['numeric value'] = Number(item?.custom_fields?.[slider.key] ?? slider.defaultValue);
+    if (text) out['free text'] = String(item?.custom_fields?.[text.key] || '');
+    return out;
+  }
+
+  function getImportedAuxiliaryFields(obj) {
+    const slider = getSliderOption();
+    const text = getTextOption();
+    const imported = {};
+
+    if (slider && Object.prototype.hasOwnProperty.call(obj, 'numeric value')) {
+      imported[slider.key] = obj['numeric value'];
+    }
+    if (text && Object.prototype.hasOwnProperty.call(obj, 'free text')) {
+      imported[text.key] = obj['free text'];
+    }
+
+    return imported;
+  }
+
+  function ensureCustomFields(item) {
+    const defaults = getDefaultCustomFields();
+    item.custom_fields = item.custom_fields && typeof item.custom_fields === 'object' ? { ...item.custom_fields } : {};
+    for (const [key, value] of Object.entries(defaults)) {
+      if (!(key in item.custom_fields)) item.custom_fields[key] = value;
+    }
+    item._customFieldState = item._customFieldState && typeof item._customFieldState === 'object' ? { ...item._customFieldState } : {};
+    const slider = getSliderOption();
+    if (slider && !(slider.key in item._customFieldState)) {
+      item._customFieldState[slider.key] = Object.prototype.hasOwnProperty.call(item.custom_fields, slider.key);
+    }
+  }
+
+  function syncCustomFieldsFromUI(item) {
+    if (!item) return;
+    ensureCustomFields(item);
+    const slider = getSliderOption();
+    const text = getTextOption();
+    if (slider && els.auxSliderInput) item.custom_fields[slider.key] = Number(els.auxSliderInput.value);
+    if (text && els.auxTextInput) item.custom_fields[text.key] = String(els.auxTextInput.value || '').slice(0, text.maxChars);
+  }
+
+  function validateCustomFields(item) {
+    ensureCustomFields(item);
+    const slider = getSliderOption();
+    const text = getTextOption();
+
+    if (slider && slider.required) {
+      const rawValue = item.custom_fields[slider.key];
+      const numericValue = Number(rawValue);
+      const touched = !!item._customFieldState?.[slider.key];
+      if (!Number.isFinite(numericValue) || !touched) return `${slider.name} is required.`;
+    }
+
+    if (text && text.required) {
+      const value = String(item.custom_fields[text.key] || '').trim();
+      if (!value) return `${text.name} is required.`;
+    }
+
+    return null;
+  }
+
+  function showToast(message, variant = 'success') {
+    clearTimeout(toastTimer);
+    els.toast.textContent = message;
+    els.toast.className = 'toast show';
+    els.toast.style.background = variant === 'success'
+      ? 'linear-gradient(135deg, #15803d, #22c55e)'
+      : variant === 'error'
+        ? 'linear-gradient(135deg, #b91c1c, #ef4444)'
+        : 'linear-gradient(135deg, #334155, #475569)';
+    toastTimer = setTimeout(() => els.toast.classList.remove('show'), 2600);
+  }
+
+  function loadGamification() {
+    try {
+      const saved = localStorage.getItem(GAMIFICATION_STORAGE_KEY);
+      if (saved) Object.assign(gamification, JSON.parse(saved));
+    } catch {}
+    applyGamificationVisibility();
+    renderGamification();
+  }
+
+  function saveGamification() {
+    try { localStorage.setItem(GAMIFICATION_STORAGE_KEY, JSON.stringify(gamification)); } catch {}
+  }
+
+  function getLevel(xp) {
+    const levels = getActiveGamificationConfig().levels;
+    let level = levels[0];
+    for (let i = levels.length - 1; i >= 0; i--) {
+      if (xp >= levels[i].xp) { level = levels[i]; break; }
+    }
+    return level;
+  }
+
+  function getNextLevel(xp) {
+    for (const level of getActiveGamificationConfig().levels) if (xp < level.xp) return level;
+    return null;
+  }
+
+  function getLevelNumber(title) {
+    const index = getActiveGamificationConfig().levels.findIndex(level => level.title === title);
+    return index >= 0 ? index + 1 : 1;
+  }
+
+  function renderGamification() {
+    const level = getLevel(gamification.totalXP);
+    const next = getNextLevel(gamification.totalXP);
+    const progress = next ? ((gamification.totalXP - level.xp) / (next.xp - level.xp)) * 100 : 100;
+
+    els.gameLevelIcon.textContent = level.icon;
+    els.gameLevelTitle.textContent = level.title;
+    els.gameLevelMeta.textContent = `Level ${getLevelNumber(level.title)}`;
+    els.gameXpText.textContent = `${gamification.totalXP} XP`;
+    els.xpFill.style.width = `${Math.max(0, Math.min(progress, 100))}%`;
+    els.gameAnnotations.textContent = gamification.totalAnnotations;
+    els.gameStreak.textContent = gamification.streak;
+    els.gameToggleBtn.textContent = gamification.enabled ? 'Gamification On' : 'Gamification Off';
+    applyGamebarLayout();
+  }
+
+  function applyGamificationVisibility() {
+    els.gameBar.style.opacity = gamification.enabled ? '1' : '.6';
+    els.gameResetBtn.style.display = gamification.enabled ? '' : 'none';
+  }
+
+  function applyGamebarLayout() {
+    els.gameBar.classList.toggle('compact', uiPrefs.extraOptionsCollapsed);
+  }
+
+  function toggleExtraOptionsCollapsed() {
+    uiPrefs.extraOptionsCollapsed = !uiPrefs.extraOptionsCollapsed;
+    try { localStorage.setItem(EXTRA_OPTIONS_COLLAPSED_STORAGE_KEY, uiPrefs.extraOptionsCollapsed ? 'true' : 'false'); } catch {}
+    applyGamebarLayout();
+    applyTranslationLayout();
+  }
+
+  function toggleGamification() {
+    gamification.enabled = !gamification.enabled;
+    saveGamification();
+    applyGamificationVisibility();
+    renderGamification();
+  }
+
+  function resetGamification() {
+    if (!confirm('Reset all gamification progress? This cannot be undone.')) return;
+    gamification.totalXP = 0;
+    gamification.streak = 0;
+    gamification.totalAnnotations = 0;
+    saveGamification();
+    renderGamification();
+    showToast('Gamification progress reset.', 'neutral');
+  }
+
+  function getTimeThreshold(item) {
+    const cfg = getActiveGamificationConfig().timeBasedXp;
+    if (!item) return 25;
+    const unionCount = Array.isArray(item.union_original) ? item.union_original.length : (Array.isArray(item.union) ? item.union.length : 0);
+    const dissentCount = Array.isArray(item.dissent) ? item.dissent.length : 0;
+    return cfg.baseSeconds + (unionCount * cfg.unionSeconds) + (dissentCount * cfg.dissentSeconds);
+  }
+
+  function calculateXP(item) {
+    const cfg = getActiveGamificationConfig();
+    const timeSpent = (Date.now() - sentenceStartTime) / 1000;
+    const threshold = getTimeThreshold(item);
+    const timeRatio = Math.min(timeSpent / threshold, 1);
+    let xp = Math.round(cfg.timeBasedXp.min + ((cfg.timeBasedXp.max - cfg.timeBasedXp.min) * timeRatio));
+
+    const slider = getSliderOption();
+    const text = getTextOption();
+    const customFields = item?.custom_fields || {};
+    const customFieldState = item?._customFieldState || {};
+    if (slider && customFieldState[slider.key]) xp += cfg.fieldXp.slider;
+    if (text && String(customFields[text.key] || '').trim()) xp += cfg.fieldXp.text;
+
+    const matchedBonus = cfg.streakBonuses.filter(bonus => gamification.streak >= bonus.streak).pop();
+    if (matchedBonus) xp = Math.floor(xp * matchedBonus.multiplier);
+    return Math.max(xp, 10);
+  }
+
+  function showXPPopup(xp) {
+    const popup = document.createElement('div');
+    popup.className = 'xp-popup';
+    popup.textContent = `+${xp} XP`;
+    popup.style.left = `${Math.random() * 38 + 31}%`;
+    popup.style.top = '28%';
+    document.body.appendChild(popup);
+    setTimeout(() => popup.remove(), 1500);
+  }
+
+  let confettiCtx = null;
+  let confettiParticles = [];
+  let confettiAnimating = false;
+
+  function launchConfetti(count = 100) {
+    if (!confettiCtx) confettiCtx = els.confettiCanvas.getContext('2d');
+    els.confettiCanvas.width = window.innerWidth;
+    els.confettiCanvas.height = window.innerHeight;
+    els.confettiCanvas.classList.add('active');
+    const colors = ['#06b6d4', '#22c55e', '#f59e0b', '#eab308', '#ef4444', '#8b5cf6'];
+    confettiParticles = Array.from({ length: count }, () => ({
+      x: Math.random() * els.confettiCanvas.width,
+      y: -20 - Math.random() * els.confettiCanvas.height * 0.35,
+      w: Math.random() * 10 + 5,
+      h: Math.random() * 6 + 3,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      vx: (Math.random() - 0.5) * 10,
+      vy: Math.random() * 4 + 2,
+      rotation: Math.random() * 360,
+      rotationSpeed: (Math.random() - 0.5) * 15,
+      opacity: 1,
+      decay: 0.006 + Math.random() * 0.005
+    }));
+    if (!confettiAnimating) {
+      confettiAnimating = true;
+      animateConfetti();
+    }
+  }
+
+  function animateConfetti() {
+    confettiCtx.clearRect(0, 0, els.confettiCanvas.width, els.confettiCanvas.height);
+    confettiParticles.forEach(p => {
+      p.x += p.vx;
+      p.vy += 0.1;
+      p.y += p.vy;
+      p.rotation += p.rotationSpeed;
+      p.opacity -= p.decay;
+      if (p.opacity > 0) {
+        confettiCtx.save();
+        confettiCtx.translate(p.x, p.y);
+        confettiCtx.rotate(p.rotation * Math.PI / 180);
+        confettiCtx.globalAlpha = Math.max(0, p.opacity);
+        confettiCtx.fillStyle = p.color;
+        confettiCtx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+        confettiCtx.restore();
+      }
+    });
+    confettiParticles = confettiParticles.filter(p => p.opacity > 0);
+    if (confettiParticles.length > 0) requestAnimationFrame(animateConfetti);
+    else {
+      confettiAnimating = false;
+      els.confettiCanvas.classList.remove('active');
+      confettiCtx.clearRect(0, 0, els.confettiCanvas.width, els.confettiCanvas.height);
+    }
+  }
+
+  function showLevelUpModal(level) {
+    els.levelUpIcon.textContent = level.icon;
+    els.levelUpTitle.textContent = level.title;
+    els.levelUpMeta.textContent = `Level ${getLevelNumber(level.title)}`;
+    els.levelUpDesc.textContent = level.desc;
+    els.levelUpModal.classList.add('open');
+    els.levelUpModal.setAttribute('aria-hidden', 'false');
+    launchConfetti(180);
+  }
+
+  function closeLevelUpModal() {
+    els.levelUpModal.classList.remove('open');
+    els.levelUpModal.setAttribute('aria-hidden', 'true');
+  }
+
+  function updateTranslationControls() {
+    els.translationLangSelect.value = sentenceTranslation.targetLang;
+    els.translationToggleBtn.textContent = sentenceTranslation.enabled ? 'Hover translation On' : 'Hover translation Off';
+    els.sentence.classList.toggle('sentence-hover-target', sentenceTranslation.enabled);
+    applyTranslationLayout();
+  }
+
+  function updateTaskButton() {
+    const hasTask = !!TAXONOMY.taskDescription;
+    els.taskInfoBtn.style.display = hasTask ? '' : 'none';
+  }
+
+  function applyTranslationLayout() {
+    els.translationPanel.classList.toggle('compact', uiPrefs.extraOptionsCollapsed);
+    els.extraOptionsCollapseBtn.textContent = uiPrefs.extraOptionsCollapsed ? 'Show Extra Options' : 'Hide Extra Options';
+    els.translationHint.style.display = uiPrefs.extraOptionsCollapsed ? 'none' : '';
+  }
+
+  function openTaskModal() {
+    const description = TAXONOMY.taskDescription || 'No task description provided in the taxonomy.';
+    els.taskModalContent.textContent = description;
+    els.taskModal.classList.add('open');
+    els.taskModal.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeTaskModal() {
+    els.taskModal.classList.remove('open');
+    els.taskModal.setAttribute('aria-hidden', 'true');
+  }
+
+  function toggleSentenceTranslation() {
+    sentenceTranslation.enabled = !sentenceTranslation.enabled;
+    try { localStorage.setItem(SENTENCE_TRANSLATION_STORAGE_KEY, sentenceTranslation.enabled ? 'true' : 'false'); } catch {}
+    sentenceTranslation.activeKey = null;
+    updateTranslationControls();
+    hideHoverTooltip();
+  }
+
+  function setTranslationLanguage(lang) {
+    sentenceTranslation.targetLang = LANGUAGE_CONFIG[lang] ? lang : 'en';
+    try { localStorage.setItem(TRANSLATION_LANGUAGE_STORAGE_KEY, sentenceTranslation.targetLang); } catch {}
+    sentenceTranslation.activeKey = null;
+    updateTranslationControls();
+    hideHoverTooltip();
+  }
+
+  function positionHoverTooltip(evt) {
+    const tooltip = els.hoverTooltip;
+    tooltip.classList.add('show');
+    const left = Math.min(evt.clientX + 18, window.innerWidth - tooltip.offsetWidth - 12);
+    const top = Math.min(evt.clientY + 18, window.innerHeight - tooltip.offsetHeight - 12);
+    tooltip.style.left = `${Math.max(12, left)}px`;
+    tooltip.style.top = `${Math.max(12, top)}px`;
+  }
+
+  function hideHoverTooltip() {
+    sentenceTranslation.activeKey = null;
+    els.hoverTooltip.classList.remove('show');
+  }
+
+  function showSentenceTooltipContent(html) {
+    els.hoverTooltip.innerHTML = html;
+    els.hoverTooltip.classList.add('show');
+  }
+
+  function getSentenceTooltipMarkup(result) {
+    if (result.status === 'loading') return `<div style="font-weight:700;">Sentence translation</div><div style="margin-top:8px; color:#cbd5e1;">Checking language and loading translation…</div>`;
+    if (result.status === 'same-language') return `<div style="font-weight:700;">Sentence translation</div><div style="margin-top:8px; color:#cbd5e1;">This sentence already matches the selected language.</div>`;
+    if (result.status === 'error') return `<div style="font-weight:700;">Sentence translation</div><div style="margin-top:8px; color:#cbd5e1;">Translation is currently unavailable.</div>`;
+    const providerLabel = 'via NLLB';
+    return `<div style="font-weight:700;">Sentence translation</div><div style="margin-top:8px; color:#e2e8f0; line-height:1.5;">${escapeHtml(result.text)}</div><div style="margin-top:10px; padding-top:10px; border-top:1px solid #1e293b; font-size:11px; text-transform:uppercase; letter-spacing:.12em; color:#94a3b8;">${escapeHtml(providerLabel)}</div>`;
+  }
+
+  async function getSentenceTranslation(sentence, targetLang) {
+    const cacheKey = `${targetLang}::${sentence}`;
+    if (sentenceTranslation.cache.has(cacheKey)) return sentenceTranslation.cache.get(cacheKey);
+    if (sentenceTranslation.pending.has(cacheKey)) return sentenceTranslation.pending.get(cacheKey);
+
+    const promise = (async () => {
+      let detected = null;
+      try {
+        detected = await detectSentenceLanguage(sentence);
+        if (detected && normalizeDetectedLanguage(detected.language) === targetLang) return { status: 'same-language', sourceLanguage: detected.language };
+      } catch (error) {
+        console.warn('Language detection failed:', error);
+      }
+      try {
+        const ensuredDetection = detected || await detectSentenceLanguage(sentence);
+        if (!ensuredDetection || !ensuredDetection.language) throw new Error('No source language available.');
+        if (normalizeDetectedLanguage(ensuredDetection.language) === targetLang) return { status: 'same-language', sourceLanguage: ensuredDetection.language };
+        const translated = await translateWithNllb(sentence, ensuredDetection.language, LANGUAGE_CONFIG[targetLang].nllb);
+        return { status: 'translated', text: translated, provider: 'nllb', sourceLanguage: ensuredDetection.language };
+      } catch (error) {
+        console.warn('All translation providers failed:', error);
+        return { status: 'error' };
+      }
+    })();
+
+    sentenceTranslation.pending.set(cacheKey, promise);
+    try {
+      const result = await promise;
+      if (result.status !== 'error') sentenceTranslation.cache.set(cacheKey, result);
+      return result;
+    } finally {
+      sentenceTranslation.pending.delete(cacheKey);
+    }
+  }
+
+  async function detectSentenceLanguage(sentence) {
+    let lastError = null;
+    for (const baseUrl of NLLB_SPACES) {
+      try {
+        const url = `${baseUrl}/api/v4/language?text=${encodeURIComponent(sentence)}&fast-model-confidence-threshold=0.85&accurate-model-confidence-threshold=0.35`;
+        const response = await fetch(url, { method: 'GET', headers: { accept: 'application/json' } });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = await response.json();
+        if (!payload || !payload.language) throw new Error('No language returned.');
+        return payload;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError || new Error('No language detection endpoint reachable.');
+  }
+
+  async function translateWithNllb(sentence, sourceLang, targetLang) {
+    const chunks = chunkTextForNllb(sentence);
+    const translatedChunks = [];
+    for (const chunk of chunks) translatedChunks.push(await requestNllbTranslation(chunk, sourceLang, targetLang));
+    return translatedChunks.join(' ').replace(/\s+([,.;:!?])/g, '$1').trim();
+  }
+
+  async function requestNllbTranslation(text, sourceLang, targetLang) {
+    let lastError = null;
+    for (const baseUrl of NLLB_SPACES) {
+      try {
+        const url = `${baseUrl}/api/v4/translator?text=${encodeURIComponent(text)}&source=${encodeURIComponent(sourceLang)}&target=${encodeURIComponent(targetLang)}`;
+        const response = await fetch(url, { method: 'GET', headers: { accept: 'application/json' } });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = await response.json();
+        if (!payload || !payload.result) throw new Error('No translation result.');
+        return payload.result;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError || new Error('No NLLB endpoint reachable.');
+  }
+
+  function chunkTextForNllb(text, maxEstimatedTokens = 420) {
+    const normalized = String(text || '').replace(/\s+/g, ' ').trim();
+    if (!normalized) return [''];
+    if (estimateNllbTokens(normalized) <= maxEstimatedTokens) return [normalized];
+    const sentenceLikeParts = splitTextPreservingDelimiters(normalized, /(?<=[.!?])\s+/);
+    const sentenceChunks = packSegmentsByEstimatedTokens(sentenceLikeParts, maxEstimatedTokens);
+    if (sentenceChunks.every(chunk => estimateNllbTokens(chunk) <= maxEstimatedTokens)) return sentenceChunks.flatMap(chunk => splitOversizedChunk(chunk, maxEstimatedTokens));
+    return splitOversizedChunk(normalized, maxEstimatedTokens);
+  }
+
+  function splitOversizedChunk(text, maxEstimatedTokens) {
+    if (estimateNllbTokens(text) <= maxEstimatedTokens) return [text.trim()];
+    const clauseParts = splitTextPreservingDelimiters(text, /(?<=[,;:])\s+/);
+    const clauseChunks = packSegmentsByEstimatedTokens(clauseParts, maxEstimatedTokens);
+    if (clauseChunks.length > 1 || clauseParts.length > 1) return clauseChunks.flatMap(chunk => splitOversizedChunk(chunk, maxEstimatedTokens));
+    return splitWordsByEstimatedTokens(text, maxEstimatedTokens);
+  }
+
+  function splitWordsByEstimatedTokens(text, maxEstimatedTokens) {
+    const words = String(text || '').trim().split(/\s+/).filter(Boolean);
+    if (!words.length) return [''];
+    const chunks = [];
+    let current = '';
+    for (const word of words) {
+      const candidate = current ? `${current} ${word}` : word;
+      if (current && estimateNllbTokens(candidate) > maxEstimatedTokens) {
+        chunks.push(current.trim());
+        current = word;
+      } else current = candidate;
+    }
+    if (current) chunks.push(current.trim());
+    return chunks;
+  }
+
+  function packSegmentsByEstimatedTokens(segments, maxEstimatedTokens) {
+    const cleaned = segments.map(segment => segment.trim()).filter(Boolean);
+    if (!cleaned.length) return [];
+    const chunks = [];
+    let current = '';
+    for (const segment of cleaned) {
+      const candidate = current ? `${current} ${segment}` : segment;
+      if (current && estimateNllbTokens(candidate) > maxEstimatedTokens) {
+        chunks.push(current.trim());
+        current = segment;
+      } else current = candidate;
+    }
+    if (current) chunks.push(current.trim());
+    return chunks;
+  }
+
+  function splitTextPreservingDelimiters(text, separatorRegex) {
+    return String(text || '').split(separatorRegex).map(part => part.trim()).filter(Boolean);
+  }
+
+  function estimateNllbTokens(text) {
+    const normalized = String(text || '').trim();
+    if (!normalized) return 0;
+    const words = normalized.split(/\s+/).filter(Boolean).length;
+    const chars = normalized.length;
+    return Math.max(Math.ceil(chars / 4), Math.ceil(words * 1.8));
+  }
+
+  function normalizeDetectedLanguage(language) {
+    if (!language) return null;
+    const normalized = String(language).toLowerCase();
+    const entry = Object.entries(LANGUAGE_CONFIG).find(([, config]) =>
+      normalized === config.nllb.toLowerCase() ||
+      config.aliases.some(alias => normalized === alias || normalized.startsWith(`${alias}_`) || normalized.startsWith(`${alias}-`))
+    );
+    return entry ? entry[0] : null;
+  }
+
   // ===== App State =====
   let data = [];
   let idx = 0; // index in full dataset
   const activeFilter = { unionType: null };
+  let sentenceStartTime = Date.now();
+  let lastRenderedItemId = null;
+  let toastTimer = null;
+
+  const gamification = { totalXP: 0, streak: 0, totalAnnotations: 0, enabled: true };
+  const sentenceTranslation = {
+    enabled: localStorage.getItem(SENTENCE_TRANSLATION_STORAGE_KEY) !== 'false',
+    targetLang: localStorage.getItem(TRANSLATION_LANGUAGE_STORAGE_KEY) || (Object.keys(LANGUAGE_CONFIG).find(key => (navigator.language || 'en').toLowerCase().startsWith(key)) || 'en'),
+    cache: new Map(),
+    pending: new Map(),
+    activeKey: null
+  };
+  const legacyGamebarCollapsed = localStorage.getItem('salomo_gamebar_collapsed') === 'true';
+  const legacyTranslationPanelCollapsed = localStorage.getItem('salomo_translation_panel_collapsed') === 'true';
+  const uiPrefs = {
+    extraOptionsCollapsed: (() => {
+      const saved = localStorage.getItem(EXTRA_OPTIONS_COLLAPSED_STORAGE_KEY);
+      if (saved === 'true') return true;
+      if (saved === 'false') return false;
+      return legacyGamebarCollapsed || legacyTranslationPanelCollapsed;
+    })()
+  };
 
   const els = {
     mainGrid: $('#mainGrid'),
@@ -512,6 +1361,13 @@
     fileInput: $('#fileInput'),
     datasetInfo: $('#datasetInfo'),
     sentence: $('#sentence'),
+    translationLangSelect: $('#translationLangSelect'),
+    translationToggleBtn: $('#translationToggleBtn'),
+    extraOptionsCollapseBtn: $('#extraOptionsCollapseBtn'),
+    translationPanel: $('#translationPanel'),
+    translationHint: $('#translationHint'),
+    hoverTooltip: $('#hoverTooltip'),
+    taskInfoBtn: $('#taskInfoBtn'),
     statusField: $('#statusField'),
     unionOriginal: $('#unionOriginal'),
     unionPreview: $('#unionPreview'),
@@ -532,6 +1388,8 @@
     downloadBtn: $('#downloadBtn'),
     clearItemBtn: $('#clearItemBtn'),
     deleteItemBtn: $('#deleteItemBtn'),
+    auxFieldsPanel: $('#auxFieldsPanel'),
+    auxFieldsArea: $('#auxFieldsArea'),
     jumpInput: $('#jumpInput'),
     jumpBtn: $('#jumpBtn'),
     annotatorName: $('#annotatorName'),
@@ -554,6 +1412,31 @@
     typeList: $('#typeList'),
     typeRefList: $('#typeRefList'),
     typeRefMeta: $('#typeRefMeta'),
+    gameBar: $('#gameBar'),
+    gameLevelIcon: $('#gameLevelIcon'),
+    gameLevelTitle: $('#gameLevelTitle'),
+    gameLevelMeta: $('#gameLevelMeta'),
+    gameXpText: $('#gameXpText'),
+    xpFill: $('#xpFill'),
+    gameAnnotations: $('#gameAnnotations'),
+    gameStreak: $('#gameStreak'),
+    gameToggleBtn: $('#gameToggleBtn'),
+    gameResetBtn: $('#gameResetBtn'),
+    levelUpModal: $('#levelUpModal'),
+    levelUpIcon: $('#levelUpIcon'),
+    levelUpTitle: $('#levelUpTitle'),
+    levelUpMeta: $('#levelUpMeta'),
+    levelUpDesc: $('#levelUpDesc'),
+    levelUpCloseBtn: $('#levelUpCloseBtn'),
+    taskModal: $('#taskModal'),
+    taskModalContent: $('#taskModalContent'),
+    closeTaskModal: $('#closeTaskModal'),
+    taskModalCloseBtn: $('#taskModalCloseBtn'),
+    toast: $('#toast'),
+    confettiCanvas: $('#confettiCanvas'),
+    auxSliderInput: null,
+    auxTextInput: null,
+    auxTextCount: null,
   };
 
   function parseJSONL_UTF8(file) {
@@ -576,6 +1459,7 @@
             obj.resolved = !!obj.resolved;
             obj.added_nonoriginal = Array.isArray(obj.added_nonoriginal) ? obj.added_nonoriginal.slice() : [];
             obj.removed_nondissented = Array.isArray(obj.removed_nondissented) ? obj.removed_nondissented.slice() : [];
+            obj.custom_fields = getImportedAuxiliaryFields(obj);
             out.push(obj);
           } catch(e) {
             console.warn('Invalid JSON at line', i+1, e);
@@ -667,7 +1551,7 @@
       els.placeholder.style.display = '';
       els.placeholder.textContent = activeFilter.unionType
         ? 'No items match the current filter. Clear the filter to see all items.'
-        : 'Load a taxonomy and a JSONL file to begin.';
+        : 'Load a taxonomy and config JSON file, then load a JSONL file to begin.';
       renderProgress();
       return false;
     }
@@ -705,7 +1589,16 @@
     if (!ensureIdxInView()) return;
     const item = data[idx];
 
+    if (item && item._id !== lastRenderedItemId) {
+      lastRenderedItemId = item._id;
+      sentenceStartTime = Date.now();
+      hideHoverTooltip();
+    }
+
+    ensureCustomFields(item);
+
     els.sentence.textContent = item.sentence || '(no sentence provided)';
+    els.sentence.dataset.sentenceText = item.sentence || '';
     renderStatus(item);
 
     renderChips(els.unionOriginal, item.union_original);
@@ -764,6 +1657,7 @@
       removed: new Set(item.union_original.filter(l => !preview.includes(l)))
     };
     renderChips(els.unionPreview, preview, diff);
+    renderAuxiliaryFields(item);
 
     const vis = getVisibleIndices();
     const pos = vis.indexOf(idx);
@@ -772,6 +1666,117 @@
     els.nextUnresolvedBtn.disabled = (vis.findIndex((i, k) => k > pos && !decisionsComplete(data[i])) === -1);
 
     renderProgress();
+    updateTranslationControls();
+  }
+
+  function renderAuxiliaryFields(item) {
+    const slider = getSliderOption();
+    const text = getTextOption();
+    els.auxFieldsArea.innerHTML = '';
+    els.auxSliderInput = null;
+    els.auxTextInput = null;
+    els.auxTextCount = null;
+
+    if (!slider && !text) {
+      els.auxFieldsPanel.style.display = 'none';
+      return;
+    }
+
+    ensureCustomFields(item);
+    els.auxFieldsPanel.style.display = '';
+
+    if (slider) {
+      const wrap = document.createElement('div');
+      wrap.className = 'stack aux-field';
+
+      const title = document.createElement('div');
+      title.className = 'aux-title';
+      title.textContent = slider.required ? `${slider.name} *` : slider.name;
+
+      const row = document.createElement('div');
+      row.className = 'aux-slider-row';
+
+      const left = document.createElement('div');
+      left.className = 'aux-slider-label';
+      left.textContent = slider.leftLabel;
+
+      const input = document.createElement('input');
+      input.type = 'range';
+      input.min = String(slider.min);
+      input.max = String(slider.max);
+      input.step = String(slider.step);
+      input.value = String(item.custom_fields[slider.key] ?? slider.defaultValue);
+
+      const right = document.createElement('div');
+      right.className = 'aux-slider-label';
+      right.style.textAlign = 'right';
+      right.textContent = slider.rightLabel;
+
+      const value = document.createElement('div');
+      value.className = 'aux-slider-value';
+      value.textContent = Number(input.value).toFixed(2);
+
+      const helper = document.createElement('div');
+      helper.className = 'aux-desc';
+      if (slider.required && !item._customFieldState?.[slider.key]) {
+        helper.textContent = 'Required. Move the slider to confirm a value.';
+      } else {
+        helper.textContent = slider.required ? 'Required.' : 'Optional.';
+      }
+
+      input.addEventListener('input', () => {
+        value.textContent = Number(input.value).toFixed(2);
+        item.custom_fields[slider.key] = Number(input.value);
+        item._customFieldState[slider.key] = true;
+        helper.textContent = slider.required ? 'Required.' : 'Optional.';
+      });
+
+      row.appendChild(left);
+      row.appendChild(input);
+      row.appendChild(right);
+      row.appendChild(value);
+      wrap.appendChild(title);
+      wrap.appendChild(row);
+      wrap.appendChild(helper);
+      els.auxFieldsArea.appendChild(wrap);
+      els.auxSliderInput = input;
+    }
+
+    if (text) {
+      const wrap = document.createElement('div');
+      wrap.className = 'stack aux-field';
+
+      const title = document.createElement('div');
+      title.className = 'aux-title';
+      title.textContent = text.required ? `${text.name} *` : text.name;
+
+      const desc = document.createElement('div');
+      desc.className = 'aux-desc';
+      desc.textContent = text.required ? `${text.description} Required.` : text.description;
+
+      const area = document.createElement('textarea');
+      area.placeholder = text.placeholder || '';
+      area.maxLength = text.maxChars;
+      area.value = String(item.custom_fields[text.key] || '');
+
+      const count = document.createElement('div');
+      count.className = 'aux-desc';
+      count.textContent = `${area.value.length} / ${text.maxChars} chars`;
+
+      area.addEventListener('input', () => {
+        if (area.value.length > text.maxChars) area.value = area.value.slice(0, text.maxChars);
+        item.custom_fields[text.key] = area.value;
+        count.textContent = `${area.value.length} / ${text.maxChars} chars`;
+      });
+
+      wrap.appendChild(title);
+      wrap.appendChild(desc);
+      wrap.appendChild(area);
+      wrap.appendChild(count);
+      els.auxFieldsArea.appendChild(wrap);
+      els.auxTextInput = area;
+      els.auxTextCount = count;
+    }
   }
 
   function keepOrRemoveAll(keep) {
@@ -784,6 +1789,13 @@
   function saveCurrent() {
     if (!data.length) return;
     const item = data[idx];
+    const wasResolved = !!item.resolved;
+    syncCustomFieldsFromUI(item);
+    const customFieldError = validateCustomFields(item);
+    if (customFieldError) {
+      showToast(customFieldError, 'error');
+      return;
+    }
 
     // Fill defaults so "no change" still resolves
     autofillDecisionsToCurrentUnion(item);
@@ -798,6 +1810,26 @@
 
     // Record change fields
     computeChangeFields(item);
+
+    if (gamification.enabled && !wasResolved) {
+      const oldLevel = getLevel(gamification.totalXP);
+      const earnedXP = calculateXP(item);
+      gamification.totalXP += earnedXP;
+      gamification.totalAnnotations += 1;
+      gamification.streak += 1;
+      saveGamification();
+      renderGamification();
+      showXPPopup(earnedXP);
+      const newLevel = getLevel(gamification.totalXP);
+      if (newLevel.title !== oldLevel.title) {
+        setTimeout(() => showLevelUpModal(newLevel), 300);
+      } else {
+        launchConfetti(70);
+      }
+      showToast(`Saved. +${earnedXP} XP`, 'success');
+    } else {
+      showToast('Saved.', 'success');
+    }
 
     if (!ensureIdxInView()) return;
     renderItem();
@@ -827,6 +1859,7 @@
         added_nonoriginal: Array.isArray(obj.added_nonoriginal) ? obj.added_nonoriginal : [],
         removed_nondissented: Array.isArray(obj.removed_nondissented) ? obj.removed_nondissented : [],
       };
+      Object.assign(out, getExportAuxiliaryFields(obj));
       if (obj.resolved_by) out.resolved_by = obj.resolved_by;
       if (obj.resolved_at) out.resolved_at = obj.resolved_at;
       return JSON.stringify(out);
@@ -1028,7 +2061,7 @@
     if (typeNames.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'muted small';
-      empty.textContent = 'No taxonomy loaded. Load a taxonomy JSON file to see types here.';
+      empty.textContent = 'No taxonomy loaded. Load a taxonomy and config JSON file to see types here.';
       cont.appendChild(empty);
       els.typeRefMeta.textContent = 'No taxonomy loaded.';
       return;
@@ -1226,9 +2259,52 @@
       renderTypeReference();
     }
     rebuildTypeDatalist(); // empty until taxonomy loads
+    updateTaskButton();
   })();
 
-  // Load taxonomy: file
+  loadGamification();
+  updateTranslationControls();
+  applyGamebarLayout();
+  els.translationLangSelect.addEventListener('change', (e) => setTranslationLanguage(e.target.value));
+  els.translationToggleBtn.addEventListener('click', toggleSentenceTranslation);
+  els.extraOptionsCollapseBtn.addEventListener('click', toggleExtraOptionsCollapsed);
+  els.gameToggleBtn.addEventListener('click', toggleGamification);
+  els.gameResetBtn.addEventListener('click', resetGamification);
+  els.taskInfoBtn.addEventListener('click', openTaskModal);
+  els.levelUpCloseBtn.addEventListener('click', closeLevelUpModal);
+  els.closeTaskModal.addEventListener('click', closeTaskModal);
+  els.taskModalCloseBtn.addEventListener('click', closeTaskModal);
+  els.levelUpModal.addEventListener('click', (e) => {
+    if (e.target === els.levelUpModal) closeLevelUpModal();
+  });
+  els.taskModal.addEventListener('click', (e) => {
+    if (e.target === els.taskModal) closeTaskModal();
+  });
+  window.addEventListener('resize', hideHoverTooltip);
+  document.addEventListener('mouseleave', hideHoverTooltip);
+  els.sentence.addEventListener('mousemove', async (e) => {
+    if (!sentenceTranslation.enabled) return;
+    const sentence = (els.sentence.dataset.sentenceText || '').trim();
+    if (!sentence) return;
+    const mouseX = e.clientX;
+    const mouseY = e.clientY;
+    const fakeEvent = { clientX: mouseX, clientY: mouseY };
+
+    positionHoverTooltip(fakeEvent);
+    const key = `${sentenceTranslation.targetLang}::${sentence}`;
+    if (sentenceTranslation.activeKey !== key) {
+      sentenceTranslation.activeKey = key;
+      showSentenceTooltipContent(getSentenceTooltipMarkup({ status: 'loading' }));
+      const result = await getSentenceTranslation(sentence, sentenceTranslation.targetLang);
+      if (sentenceTranslation.activeKey === key) {
+        showSentenceTooltipContent(getSentenceTooltipMarkup(result));
+        positionHoverTooltip(fakeEvent);
+      }
+    }
+  });
+  els.sentence.addEventListener('mouseleave', hideHoverTooltip);
+
+  // Load taxonomy + config: file
   els.taxFileInput.addEventListener('change', async (e) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
@@ -1237,12 +2313,12 @@
       const json = JSON.parse(text);
       setTaxonomy(json);
     } catch (err) {
-      alert('Failed to read taxonomy JSON file.');
+      alert('Failed to read taxonomy and config JSON file.');
       console.error(err);
     }
   });
 
-  // Load taxonomy: URL
+  // Load taxonomy + config: URL
   els.taxUrlBtn.addEventListener('click', async () => {
     const url = (els.taxUrlInput.value || '').trim();
     if (!url) return;
@@ -1318,6 +2394,8 @@
     item.resolved = false;
     item.added_nonoriginal = [];
     item.removed_nondissented = [];
+    item.custom_fields = getDefaultCustomFields();
+    item._customFieldState = {};
     renderItem();
   };
 
@@ -1370,3 +2448,5 @@
 </script>
 </body>
 </html>
+
+

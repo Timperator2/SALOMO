@@ -1,0 +1,100 @@
+{
+  "name": "Taxonomy and Config Template",
+  "version": "1.2",
+  "description": "A template for loading taxonomy definitions and interface configuration into SALOMO.",
+  "taskDescription": "Read the sentence carefully and decide which taxonomy labels belong in the final union. Resolve all dissent labels, use the optional sentence-level fields if they are enabled, and save only when your review is complete.",
+  "translation": {
+    "autoTranslate": true
+  },
+  "groupOrder": [
+    "Group A",
+    "Group B",
+    "Group C"
+  ],
+  "groups": [
+    {
+      "name": "Group A",
+      "color": "#eab308"
+    },
+    {
+      "name": "Group B",
+      "color": "#3b82f6"
+    },
+    {
+      "name": "Group C",
+      "color": "#6b7280"
+    }
+  ],
+  "types": {
+    "Type 1": {
+      "group": "Group A",
+      "definition": "This is the definition of Type 1.",
+      "example": "This is an example for Type 1."
+    },
+    "Type 2": {
+      "group": "Group B",
+      "definition": "This is the definition of Type 2.",
+      "example": "This is an example for Type 2."
+    },
+    "Type 3": {
+      "group": "Group B",
+      "definition": "This is the definition of Type 3.",
+      "example": "This is an example for Type 3."
+    },
+    "Type 4": {
+      "group": "Group C",
+      "definition": "This is the definition of Type 4.",
+      "example": "This is an example for Type 4."
+    }
+  },
+  "annotationOptions": {
+    "slider": {
+      "key": "numeric_example_value",
+      "name": "Numeric example value",
+      "required": false,
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "default": 0.5,
+      "leftLabel": "left",
+      "rightLabel": "right"
+    },
+    "text": {
+      "key": "short_reasoning",
+      "name": "Short reasoning note",
+      "required": false,
+      "description": "Add a short note about what influenced your annotation decision for this sentence.",
+      "placeholder": "Write a brief note...",
+      "maxChars": 180
+    }
+  },
+  "gamification": {
+    "timeBasedXp": {
+      "min": 10,
+      "max": 25,
+      "baseSeconds": 25,
+      "unionSeconds": 5,
+      "dissentSeconds": 10
+    },
+    "fieldXp": {
+      "slider": 8,
+      "text": 15
+    },
+    "streakBonuses": [
+      { "streak": 3, "multiplier": 1.1 },
+      { "streak": 5, "multiplier": 1.25 },
+      { "streak": 10, "multiplier": 1.5 }
+    ],
+    "levels": [
+      { "xp": 0, "title": "Beginner Annotator", "icon": "🌱", "desc": "Welcome! Start annotating sentences to level up." },
+      { "xp": 60, "title": "Type Spotter", "icon": "👁️", "desc": "You are spotting patterns with confidence." },
+      { "xp": 160, "title": "Bias Detective", "icon": "🔍", "desc": "Your review decisions are getting sharper." },
+      { "xp": 320, "title": "Bias Hunter", "icon": "🎯", "desc": "You are moving through difficult items with precision." },
+      { "xp": 520, "title": "Expert Scanner", "icon": "⭐", "desc": "You are becoming a reliable expert annotator." },
+      { "xp": 850, "title": "Master Annotator", "icon": "🏆", "desc": "Strong work. Your annotation streak is impressive." },
+      { "xp": 1300, "title": "Bias Sage", "icon": "🧙", "desc": "You consistently catch nuanced label decisions." },
+      { "xp": 2100, "title": "Grand Annotator", "icon": "👑", "desc": "A major contributor to this annotation session." },
+      { "xp": 3600, "title": "Bias Legend", "icon": "💎", "desc": "Legendary annotation energy." }
+    ]
+  }
+}
